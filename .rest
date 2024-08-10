@@ -1,0 +1,20 @@
+@baseAddress = http://localhost:5000
+@jobId = {{job.response.body.id}}
+
+### Get jobs
+GET {{baseAddress}}/api/v1/jobs/{{jobId}}
+
+### Create job
+# @name job
+POST {{baseAddress}}/api/v1/jobs
+Content-Type: application/json
+
+{
+    "slug": "test-job",
+    "description": "test job description",
+    "cron": "*"
+}
+
+### Stop scheduler
+PATCH {{baseAddress}}/api/v1/scheduler/stop
+Content-Type: application/json
