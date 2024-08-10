@@ -1,4 +1,4 @@
-module task-scheduler
+module timely
 
 go 1.21.6
 

@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
-	"task-scheduler/scheduler/transport"
 	"time"
+	"timely/scheduler/transport"
 
 	"github.com/google/uuid"
 )

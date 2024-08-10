@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	test_job_handler "task-scheduler/cmd"
-	"task-scheduler/commands"
-	"task-scheduler/queries"
-	"task-scheduler/scheduler"
+	test_job_handler "timely/cmd"
+	"timely/commands"
+	"timely/queries"
+	"timely/scheduler"
 
 	"github.com/gorilla/mux"
 )

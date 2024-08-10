@@ -3,8 +3,8 @@ package queries
 import (
 	"errors"
 	"net/http"
-	"task-scheduler/scheduler"
 	"time"
+	"timely/scheduler"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"

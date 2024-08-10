@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
-	"task-scheduler/scheduler"
+	"timely/scheduler"
 )
 
 type CreateJobCommand struct {

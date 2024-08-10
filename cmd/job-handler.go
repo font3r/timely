@@ -3,8 +3,8 @@ package test_job_handler
 import (
 	"fmt"
 	"log"
-	"task-scheduler/scheduler/transport"
 	"time"
+	"timely/scheduler/transport"
 )
 
 type JobStatusEvent struct {
