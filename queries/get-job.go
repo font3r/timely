@@ -28,7 +28,7 @@ func GetJob(req *http.Request, str *scheduler.JobStorage) (JobDto, error) {
 		return JobDto{}, errors.New("invlid job id")
 	}
 
-	job := str.Get(id)
+	job := str.GetById(id)
 	if job == nil {
 		return JobDto{}, errors.New("job not found")
 	}

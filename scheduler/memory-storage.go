@@ -22,9 +22,19 @@ type JobStorage struct {
 	jobs []*Job
 }
 
-func (s *JobStorage) Get(id uuid.UUID) *Job {
+func (s *JobStorage) GetById(id uuid.UUID) *Job {
 	for _, j := range s.jobs {
 		if j.Id == id {
+			return j
+		}
+	}
+
+	return nil
+}
+
+func (s *JobStorage) GetBySlug(slug string) *Job {
+	for _, j := range s.jobs {
+		if j.Slug == slug {
 			return j
 		}
 	}

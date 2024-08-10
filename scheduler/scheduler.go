@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -26,8 +27,9 @@ type Scheduler struct {
 }
 
 type JobStatusEvent struct {
-	JobName string `json:"jobName"`
+	JobSlug string `json:"jobSlug"`
 	Status  string `json:"status"`
+	Seq     int16  `json:"seq"`
 }
 
 func Start(str *JobStorage) *Scheduler {
@@ -42,22 +44,10 @@ func Start(str *JobStorage) *Scheduler {
 		cancel: cancel,
 	}
 
-	tra, err := transport.Create(10)
+	tra, err := transport.Create(1)
 	if err != nil {
 		panic(fmt.Sprintf("create transport error %s", err))
 	}
-
-	go tra.Subscribe("job-status", func(message []byte) error {
-		jobStatus := JobStatusEvent{}
-		err := json.Unmarshal([]byte(message), &jobStatus)
-		if err != nil {
-			return err
-		}
-
-		log.Printf("received %v\n", jobStatus)
-
-		return nil
-	})
 
 	go func(str *JobStorage, schedulerId uuid.UUID, tra *transport.Transport, ctx context.Context) {
 		for {
@@ -73,6 +63,14 @@ func Start(str *JobStorage) *Scheduler {
 		}
 
 	}(str, schedulerId, tra, scheduler.ctx)
+
+	err = createInternalExchanges(tra)
+	if err != nil {
+		log.Printf("error during creating internal exchanges/queues - %v", err)
+		return nil
+	}
+
+	go processJobStatus(tra, str)
 
 	return &scheduler
 }
@@ -93,4 +91,54 @@ func processTick(str *JobStorage, tr *transport.Transport) {
 	for _, j := range str.GetPending() {
 		go j.Start(tr)
 	}
+}
+
+func processJobStatus(tra *transport.Transport, storage *JobStorage) {
+	tra.Subscribe(string(transport.QueueJobStatus),
+		func(_ string, message []byte) error {
+			jobStatus := JobStatusEvent{}
+			err := json.Unmarshal([]byte(message), &jobStatus)
+			if err != nil {
+				return err
+			}
+
+			job := storage.GetBySlug(jobStatus.JobSlug)
+			if job == nil {
+				log.Printf("received status for unregistered job %s", jobStatus.JobSlug)
+				return errors.New("received status for unregistered job")
+			}
+
+			log.Printf("received %v\n", jobStatus)
+			err = job.ProcessState(jobStatus.Status)
+			if err != nil {
+				return err
+			}
+
+			return nil
+		})
+}
+
+func createInternalExchanges(tran *transport.Transport) error {
+	err := tran.CreateExchange(string(transport.ExchangeJobSchedule))
+	if err != nil {
+		return nil
+	}
+
+	err = tran.CreateExchange(string(transport.ExchangeJobStatus))
+	if err != nil {
+		return err
+	}
+
+	err = tran.CreateQueue(string(transport.QueueJobStatus))
+	if err != nil {
+		return err
+	}
+
+	err = tran.BindQueue(string(transport.QueueJobStatus), string(transport.ExchangeJobStatus),
+		string(transport.RoutingKeyJobStatus))
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

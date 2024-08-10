@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"errors"
 	"log"
 	"time"
 	"timely/scheduler/transport"
@@ -15,10 +16,11 @@ type StartJobMessage struct {
 }
 
 const (
-	New        JobStatus = "new"
-	Processing JobStatus = "processing"
-	Finished   JobStatus = "finished"
-	Failed     JobStatus = "failed"
+	New        JobStatus = "new"        // created, waiting to schedule
+	Scheduled  JobStatus = "scheduled"  // scheduled, waiting for result
+	Processing JobStatus = "processing" // during processing
+	Finished   JobStatus = "finished"   // successfuly processed
+	Failed     JobStatus = "failed"     // error during processing
 )
 
 type Job struct {
@@ -32,23 +34,39 @@ type Job struct {
 }
 
 func (j *Job) Start(t *transport.Transport) {
-	j.Status = Processing
+	t.BindQueue(j.Slug, string(transport.ExchangeJobSchedule), j.Slug)
 
-	log.Printf("job %s started", j.Id)
+	j.Status = Scheduled
 
-	for i := 0; i < 10; i++ {
-		err := t.Publish("test-exchange", "sample-key",
-			StartJobMessage{JobName: "test-job"})
+	log.Printf("job %s/%s scheduled", j.Id, j.Slug)
 
-		if err != nil {
-			log.Printf("failed to start job %v", err)
-			j.Status = Failed
-			return
-		}
+	err := t.Publish(string(transport.ExchangeJobSchedule), j.Slug,
+		StartJobMessage{JobName: j.Slug})
+
+	if err != nil {
+		log.Printf("failed to start job %v", err)
+		j.Status = Failed
+		return
+	}
+}
+
+func (j *Job) ProcessState(status string) error {
+	if j.Status == Finished || j.Status == Failed {
+		return errors.New("job cycle finished")
 	}
 
-	time.Sleep(time.Second)
-	log.Printf("job %s completed", j.Id)
-
-	j.Status = Finished
+	switch status {
+	case string(Processing):
+		j.Status = Processing
+		return nil
+	case string(Finished):
+		j.Status = Finished
+		return nil
+	case string(Failed):
+		j.Status = Failed // TODO: requirement - what if failure occurs
+		return nil
+	default:
+		log.Printf("invalid job %s status %s", j.Slug, j.Status)
+		return errors.New("invalid job status")
+	}
 }

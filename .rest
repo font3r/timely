@@ -10,7 +10,7 @@ POST {{baseAddress}}/api/v1/jobs
 Content-Type: application/json
 
 {
-    "slug": "test-job",
+    "slug": "test-example-job-1",
     "description": "test job description",
     "cron": "*"
 }

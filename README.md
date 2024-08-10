@@ -5,3 +5,4 @@ TODO:
 [ ] - persistance layer
 [ ] - scheduling engine
 [ ] - HA
+[ ] - client sdk, api
