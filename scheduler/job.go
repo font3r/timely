@@ -1,12 +1,15 @@
 package scheduler
 
 import (
-	"errors"
 	"log"
 	"time"
-	"timely/scheduler/transport"
 
 	"github.com/google/uuid"
+)
+
+var (
+	ErrJobCycleFinished = &Error{Code: "JOB_CYCLE_FINISHED", Message: "job cycle finished"}
+	ErrJobInvalidStatus = &Error{Code: "INVALID_JOB_STATUS", Message: "invalid job status"}
 )
 
 type JobStatus string
@@ -33,14 +36,14 @@ type Job struct {
 	NextExecutionDate time.Time
 }
 
-func (j *Job) Start(t *transport.Transport) {
-	t.BindQueue(j.Slug, string(transport.ExchangeJobSchedule), j.Slug)
+func (j *Job) Start(t *Transport) {
+	t.BindQueue(j.Slug, string(ExchangeJobSchedule), j.Slug)
 
 	j.Status = Scheduled
 
 	log.Printf("job %s/%s scheduled", j.Id, j.Slug)
 
-	err := t.Publish(string(transport.ExchangeJobSchedule), j.Slug,
+	err := t.Publish(string(ExchangeJobSchedule), j.Slug,
 		StartJobMessage{JobName: j.Slug})
 
 	if err != nil {
@@ -52,7 +55,7 @@ func (j *Job) Start(t *transport.Transport) {
 
 func (j *Job) ProcessState(status string) error {
 	if j.Status == Finished || j.Status == Failed {
-		return errors.New("job cycle finished")
+		return ErrJobCycleFinished
 	}
 
 	switch status {
@@ -66,7 +69,6 @@ func (j *Job) ProcessState(status string) error {
 		j.Status = Failed // TODO: requirement - what if failure occurs
 		return nil
 	default:
-		log.Printf("invalid job %s status %s", j.Slug, j.Status)
-		return errors.New("invalid job status")
+		return ErrJobInvalidStatus
 	}
 }

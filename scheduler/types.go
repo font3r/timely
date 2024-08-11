@@ -1,4 +1,6 @@
-package transport
+package scheduler
+
+import "fmt"
 
 type ExchangeName string
 type QueueName string
@@ -14,3 +16,17 @@ const (
 
 	RoutingKeyJobStatus RoutingKey = "timely-job-status"
 )
+
+const (
+	ContentTypeHeader        = "Content-Type"
+	ApplicationJson   string = "application/json"
+)
+
+type Error struct {
+	Code    string
+	Message string
+}
+
+func (e Error) Error() string {
+	return fmt.Sprintf("%s - %s", e.Code, e.Message)
+}

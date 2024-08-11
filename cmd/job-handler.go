@@ -6,7 +6,7 @@ import (
 	"log"
 	"math/rand"
 	"time"
-	"timely/scheduler/transport"
+	"timely/scheduler"
 )
 
 type JobStatusEvent struct {
@@ -18,7 +18,7 @@ type JobStatusEvent struct {
 func Start() {
 	log.Println("starting example-service ...")
 
-	tra, err := transport.Create(1)
+	tra, err := scheduler.NewConnection(1)
 	if err != nil {
 		panic(fmt.Sprintf("create transport error %s", err))
 	}
@@ -38,14 +38,14 @@ func Start() {
 	}
 }
 
-func processMockJob(tra *transport.Transport, jobSlug string) error {
+func processMockJob(tra *scheduler.Transport, jobSlug string) error {
 	var seq int16 = 0
 
 	for i := 0; i < 10; i++ {
 
 		if rand.Intn(4) == 1 { // just random 25% failure rate for testing
-			err := tra.Publish(string(transport.ExchangeJobStatus),
-				string(transport.RoutingKeyJobStatus), JobStatusEvent{
+			err := tra.Publish(string(scheduler.ExchangeJobStatus),
+				string(scheduler.RoutingKeyJobStatus), JobStatusEvent{
 					JobSlug: jobSlug,
 					Status:  "failed",
 					Seq:     int16(seq),
@@ -58,8 +58,8 @@ func processMockJob(tra *transport.Transport, jobSlug string) error {
 			return errors.New("job failure")
 		}
 
-		err := tra.Publish(string(transport.ExchangeJobStatus),
-			string(transport.RoutingKeyJobStatus), JobStatusEvent{
+		err := tra.Publish(string(scheduler.ExchangeJobStatus),
+			string(scheduler.RoutingKeyJobStatus), JobStatusEvent{
 				JobSlug: jobSlug,
 				Status:  "processing",
 				Seq:     int16(seq),
@@ -73,8 +73,8 @@ func processMockJob(tra *transport.Transport, jobSlug string) error {
 		time.Sleep(time.Second)
 	}
 
-	err := tra.Publish(string(transport.ExchangeJobStatus),
-		string(transport.RoutingKeyJobStatus), JobStatusEvent{
+	err := tra.Publish(string(scheduler.ExchangeJobStatus),
+		string(scheduler.RoutingKeyJobStatus), JobStatusEvent{
 			JobSlug: jobSlug,
 			Status:  "finished",
 			Seq:     seq,

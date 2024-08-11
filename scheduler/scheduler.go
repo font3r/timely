@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"log"
 	"time"
-	"timely/scheduler/transport"
 
 	"github.com/google/uuid"
 )
@@ -44,12 +43,12 @@ func Start(str *JobStorage) *Scheduler {
 		cancel: cancel,
 	}
 
-	tra, err := transport.Create(1)
+	tra, err := NewConnection(1)
 	if err != nil {
 		panic(fmt.Sprintf("create transport error %s", err))
 	}
 
-	go func(str *JobStorage, schedulerId uuid.UUID, tra *transport.Transport, ctx context.Context) {
+	go func(str *JobStorage, schedulerId uuid.UUID, tra *Transport, ctx context.Context) {
 		for {
 			select {
 			case <-ctx.Done():
@@ -87,14 +86,14 @@ func (s *Scheduler) Stop() error {
 	return nil
 }
 
-func processTick(str *JobStorage, tr *transport.Transport) {
+func processTick(str *JobStorage, tr *Transport) {
 	for _, j := range str.GetPending() {
 		go j.Start(tr)
 	}
 }
 
-func processJobStatus(tra *transport.Transport, storage *JobStorage) {
-	tra.Subscribe(string(transport.QueueJobStatus),
+func processJobStatus(tra *Transport, storage *JobStorage) {
+	tra.Subscribe(string(QueueJobStatus),
 		func(_ string, message []byte) error {
 			jobStatus := JobStatusEvent{}
 			err := json.Unmarshal([]byte(message), &jobStatus)
@@ -118,24 +117,24 @@ func processJobStatus(tra *transport.Transport, storage *JobStorage) {
 		})
 }
 
-func createInternalExchanges(tran *transport.Transport) error {
-	err := tran.CreateExchange(string(transport.ExchangeJobSchedule))
+func createInternalExchanges(tran *Transport) error {
+	err := tran.CreateExchange(string(ExchangeJobSchedule))
 	if err != nil {
 		return nil
 	}
 
-	err = tran.CreateExchange(string(transport.ExchangeJobStatus))
+	err = tran.CreateExchange(string(ExchangeJobStatus))
 	if err != nil {
 		return err
 	}
 
-	err = tran.CreateQueue(string(transport.QueueJobStatus))
+	err = tran.CreateQueue(string(QueueJobStatus))
 	if err != nil {
 		return err
 	}
 
-	err = tran.BindQueue(string(transport.QueueJobStatus), string(transport.ExchangeJobStatus),
-		string(transport.RoutingKeyJobStatus))
+	err = tran.BindQueue(string(QueueJobStatus), string(ExchangeJobStatus),
+		string(RoutingKeyJobStatus))
 	if err != nil {
 		return err
 	}

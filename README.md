@@ -1,3 +1,5 @@
+centralised system for job management
+
 TODO:
 
 - [ ] mvp for task scheduling

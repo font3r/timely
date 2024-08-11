@@ -1,4 +1,4 @@
-package transport
+package scheduler
 
 import (
 	"context"
@@ -22,7 +22,7 @@ type Transport struct {
 // TODO: requirement - autocrete exchange/queue, some of the queues are temporary (one-time job),
 // other are durable for cyclic jobs (both types should be created at api call)
 
-func Create(channels int) (*Transport, error) {
+func NewConnection(channels int) (*Transport, error) {
 	log.Printf("creating new connection")
 
 	connection, err := amqp.Dial("amqp://guest:guest@localhost:5672")

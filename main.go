@@ -12,17 +12,12 @@ import (
 	"github.com/gorilla/mux"
 )
 
-const (
-	contentTypeHeader = "Content-Type"
-	applicationJson   = "application/json"
-)
-
 func main() {
 	r := mux.NewRouter()
 	srv := &http.Server{Addr: ":5000", Handler: r}
 
 	storage := &scheduler.JobStorage{}
-	scheduler := scheduler.Start(storage)
+	sched := scheduler.Start(storage)
 
 	v1 := r.PathPrefix("/api/v1").Subrouter()
 
@@ -44,10 +39,10 @@ func main() {
 		}
 
 		success(w, result)
-	}).Headers(contentTypeHeader, applicationJson).Methods("POST")
+	}).Headers(scheduler.ContentTypeHeader, scheduler.ApplicationJson).Methods("POST")
 
 	v1.HandleFunc("/scheduler/stop", func(w http.ResponseWriter, r *http.Request) {
-		err := scheduler.Stop()
+		err := sched.Stop()
 		if err != nil {
 			problem(w, err)
 		}
@@ -62,14 +57,14 @@ func main() {
 }
 
 func success(w http.ResponseWriter, data any) {
-	w.Header().Set(contentTypeHeader, applicationJson)
+	w.Header().Set(scheduler.ContentTypeHeader, scheduler.ApplicationJson)
 
 	jsonData, _ := json.Marshal(data)
 	w.Write(jsonData)
 }
 
 func problem(w http.ResponseWriter, err error) {
-	w.Header().Set(contentTypeHeader, applicationJson)
+	w.Header().Set(scheduler.ContentTypeHeader, scheduler.ApplicationJson)
 	w.WriteHeader(http.StatusBadRequest)
 
 	jsonData, _ := json.Marshal(map[string]string{"error": err.Error()})
