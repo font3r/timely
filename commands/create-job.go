@@ -3,6 +3,7 @@ package commands
 import (
 	"encoding/json"
 	"errors"
+	"github.com/google/uuid"
 	"net/http"
 	"timely/scheduler"
 )
@@ -13,16 +14,23 @@ type CreateJobCommand struct {
 	Cron        string `json:"cron"`
 }
 
-func CreateJob(req *http.Request, str *scheduler.JobStorage) (any, error) {
+type CreateJobCommandResponse struct {
+	Id uuid.UUID `json:"id"`
+}
+
+func CreateJob(req *http.Request, str *scheduler.JobStorage) (*CreateJobCommandResponse, error) {
 	comm, err := validate(req)
 	if err != nil {
 		return nil, err
 	}
 
-	job := scheduler.Create(comm.Slug, comm.Description, comm.Cron)
-	str.Add(job)
+	job := scheduler.NewJob(comm.Slug, comm.Description, comm.Cron)
+	err = str.Add(job)
+	if err != nil {
+		return nil, err
+	}
 
-	return map[string]string{"id": job.Id.String()}, nil
+	return &CreateJobCommandResponse{Id: job.Id}, nil
 }
 
 func validate(req *http.Request) (*CreateJobCommand, error) {

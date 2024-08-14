@@ -49,18 +49,19 @@ func Start(str *JobStorage) *Scheduler {
 	}
 
 	go func(str *JobStorage, schedulerId uuid.UUID, tra *Transport, ctx context.Context) {
+		tickResult := make(chan error)
+
 		for {
 			select {
 			case <-ctx.Done():
 				log.Println("scheduler stopped on demand")
 				return
 			default:
-				go processTick(str, tra)
+				go processTick(str, tra, tickResult)
+				<-tickResult
 				time.Sleep(time.Second)
 			}
-
 		}
-
 	}(str, schedulerId, tra, scheduler.ctx)
 
 	err = createInternalExchanges(tra)
@@ -86,35 +87,75 @@ func (s *Scheduler) Stop() error {
 	return nil
 }
 
-func processTick(str *JobStorage, tr *Transport) {
-	for _, j := range str.GetPending() {
-		go j.Start(tr)
+func processTick(str *JobStorage, tr *Transport, tickResult chan<- error) {
+	pendingJobs, err := str.GetNew()
+
+	if err != nil {
+		log.Printf("error getting new jobs - %v\n", err)
+		tickResult <- err
+		return
 	}
+
+	for _, j := range pendingJobs {
+		jobResult := make(chan bool)
+		go j.Start(tr, jobResult)
+
+		<-jobResult // error check
+
+		err = str.UpdateStatus(j)
+		if err != nil {
+			log.Printf("error updating status - %v\n", err)
+			tickResult <- err
+			return
+		}
+	}
+
+	tickResult <- nil
 }
 
 func processJobStatus(tra *Transport, storage *JobStorage) {
-	tra.Subscribe(string(QueueJobStatus),
+	err := tra.Subscribe(string(QueueJobStatus),
 		func(_ string, message []byte) error {
 			jobStatus := JobStatusEvent{}
-			err := json.Unmarshal([]byte(message), &jobStatus)
+			err := json.Unmarshal(message, &jobStatus)
 			if err != nil {
 				return err
 			}
 
-			job := storage.GetBySlug(jobStatus.JobSlug)
+			job, err := storage.GetBySlug(jobStatus.JobSlug)
+			if err != nil {
+				return err
+			}
+
 			if job == nil {
 				log.Printf("received status for unregistered job %s", jobStatus.JobSlug)
 				return errors.New("received status for unregistered job")
 			}
 
-			log.Printf("received %v\n", jobStatus)
-			err = job.ProcessState(jobStatus.Status)
+			log.Printf("received job status %v\n", jobStatus)
+			status, err := job.ProcessState(jobStatus.Status)
+
 			if err != nil {
 				return err
 			}
 
+			switch status {
+			case Finished, Failed:
+				{
+					err = storage.UpdateStatus(job)
+					if err != nil {
+						return err
+					}
+				}
+			}
+
 			return nil
 		})
+
+	if err != nil {
+		log.Printf("error during statusing jobs - %v\n", err)
+		return
+	}
 }
 
 func createInternalExchanges(tran *Transport) error {

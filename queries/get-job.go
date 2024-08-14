@@ -25,10 +25,14 @@ func GetJob(req *http.Request, str *scheduler.JobStorage) (JobDto, error) {
 
 	id, err := uuid.Parse(vars["id"])
 	if err != nil {
-		return JobDto{}, errors.New("invlid job id")
+		return JobDto{}, errors.New("invalid job id")
 	}
 
-	job := str.GetById(id)
+	job, err := str.GetById(id)
+	if err != nil {
+		return JobDto{}, err
+	}
+
 	if job == nil {
 		return JobDto{}, errors.New("job not found")
 	}
