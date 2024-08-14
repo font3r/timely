@@ -24,7 +24,7 @@ func Start() {
 	}
 
 	for _, jobSlug := range []string{"test-example-job-1", "test-example-job-2"} {
-		log.Printf("registered %s", jobSlug)
+		log.Printf("test app registered %s", jobSlug)
 		go tra.Subscribe(jobSlug, func(jobSlug string, message []byte) error {
 			log.Printf("requested job start with slug %s", jobSlug)
 
@@ -41,14 +41,13 @@ func Start() {
 func processMockJob(tra *scheduler.Transport, jobSlug string) error {
 	var seq int16 = 0
 
-	for i := 0; i < 10; i++ {
-
+	for i := 0; i < 5; i++ {
 		if rand.Intn(4) == 1 { // just random 25% failure rate for testing
 			err := tra.Publish(string(scheduler.ExchangeJobStatus),
 				string(scheduler.RoutingKeyJobStatus), JobStatusEvent{
 					JobSlug: jobSlug,
 					Status:  "failed",
-					Seq:     int16(seq),
+					Seq:     seq,
 				})
 
 			if err != nil {
@@ -62,7 +61,7 @@ func processMockJob(tra *scheduler.Transport, jobSlug string) error {
 			string(scheduler.RoutingKeyJobStatus), JobStatusEvent{
 				JobSlug: jobSlug,
 				Status:  "processing",
-				Seq:     int16(seq),
+				Seq:     seq,
 			})
 
 		if err != nil {

@@ -23,17 +23,13 @@ type Transport struct {
 // other are durable for cyclic jobs (both types should be created at api call)
 
 func NewConnection(channels int) (*Transport, error) {
-	log.Printf("creating new connection")
-
 	connection, err := amqp.Dial("amqp://guest:guest@localhost:5672")
 	if err != nil {
 		log.Printf("error during opening connection - %v", err)
 		return nil, err
 	}
 
-	log.Printf("creating new channel")
 	channel, err := connection.Channel()
-
 	if err != nil {
 		log.Printf("error during opening channel - %v", err)
 		return nil, err
@@ -93,9 +89,15 @@ func (transport *Transport) Subscribe(queue string, handle func(jobSlug string, 
 		rawMessage := <-delivery
 		err = handle(rawMessage.RoutingKey, rawMessage.Body)
 		if err != nil {
-			rawMessage.Nack(false, false) // TODO: requirement - handle DLQ, do not requeue for now
+			err = rawMessage.Nack(false, false)
+			if err != nil {
+				return err
+			}
 		} else {
-			rawMessage.Ack(false)
+			err = rawMessage.Ack(false)
+			if err != nil {
+				return err
+			}
 		}
 	}
 }
@@ -115,7 +117,6 @@ func (transport *Transport) CreateQueue(queue string) error {
 		return err
 	}
 
-	log.Printf("declared queue %s", createdQueue.Name)
 	transport.declaredQueues = append(transport.declaredQueues, createdQueue.Name)
 
 	return nil
@@ -135,7 +136,6 @@ func (transport *Transport) CreateExchange(exchange string) error {
 		return err
 	}
 
-	log.Printf("declared exchange %s", exchange)
 	transport.declaredExchanges = append(transport.declaredExchanges, exchange)
 
 	return nil
@@ -149,9 +149,6 @@ func (transport *Transport) BindQueue(queue, exchange, routingKey string) error 
 			exchange, queue, routingKey, err)
 		return err
 	}
-
-	log.Printf("bound queue %s to exchange %s with routing key %s",
-		queue, exchange, routingKey)
 
 	return nil
 }
