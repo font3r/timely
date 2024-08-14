@@ -1,0 +1,18 @@
+﻿CREATE DATABASE "Timely"
+    WITH
+    OWNER = postgres
+    ENCODING = 'UTF8'
+    LOCALE_PROVIDER = 'libc'
+    CONNECTION LIMIT = -1
+
+--
+CREATE TABLE IF NOT EXISTS public.jobs
+(
+    id UUID NOT NULL PRIMARY KEY,
+    slug CHARACTER VARYING(256) not null UNIQUE,
+    description CHARACTER VARYING(1024),
+    cron CHARACTER VARYING(256),
+    status CHARACTER VARYING(128) not null,
+    lastExecutionDate TIMESTAMP WITH TIME ZONE,
+    nextExecutionDate TIMESTAMP WITH TIME ZONE
+)

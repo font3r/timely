@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
-	test_job_handler "timely/cmd"
+	testjobhandler "timely/cmd"
 	"timely/commands"
 	"timely/queries"
 	"timely/scheduler"
@@ -14,10 +14,17 @@ import (
 
 func main() {
 	r := mux.NewRouter()
-	srv := &http.Server{Addr: ":5000", Handler: r}
+	srv := &http.Server{
+		Addr:    ":5000",
+		Handler: r,
+	}
 
-	storage := &scheduler.JobStorage{}
-	sched := scheduler.Start(storage)
+	storage, err := scheduler.NewJobStorage("postgres://postgres:password@127.0.0.1:5432/Timely")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	s := scheduler.Start(storage)
 
 	v1 := r.PathPrefix("/api/v1").Subrouter()
 
@@ -42,13 +49,13 @@ func main() {
 	}).Headers(scheduler.ContentTypeHeader, scheduler.ApplicationJson).Methods("POST")
 
 	v1.HandleFunc("/scheduler/stop", func(w http.ResponseWriter, r *http.Request) {
-		err := sched.Stop()
+		err := s.Stop()
 		if err != nil {
 			problem(w, err)
 		}
 	}).Methods("PATCH")
 
-	go test_job_handler.Start()
+	go testjobhandler.Start()
 
 	log.Printf("listening on %v", srv.Addr)
 	if err := srv.ListenAndServe(); err != nil {
