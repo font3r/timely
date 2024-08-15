@@ -22,16 +22,16 @@ type Transport struct {
 // TODO: requirement - autocrete exchange/queue, some of the queues are temporary (one-time job),
 // other are durable for cyclic jobs (both types should be created at api call)
 
-func NewConnection(channels int) (*Transport, error) {
+func NewConnection() (*Transport, error) {
 	connection, err := amqp.Dial("amqp://guest:guest@localhost:5672")
 	if err != nil {
-		log.Printf("error during opening connection - %v", err)
+		log.Printf("error during opening rabbitmq connection - %v", err)
 		return nil, err
 	}
 
 	channel, err := connection.Channel()
 	if err != nil {
-		log.Printf("error during opening channel - %v", err)
+		log.Printf("error during opening rabbitmq channel - %v", err)
 		return nil, err
 	}
 
@@ -89,6 +89,8 @@ func (transport *Transport) Subscribe(queue string, handle func(jobSlug string, 
 		rawMessage := <-delivery
 		err = handle(rawMessage.RoutingKey, rawMessage.Body)
 		if err != nil {
+			log.Printf("error during consumer processing - %v\n", err)
+
 			err = rawMessage.Nack(false, false)
 			if err != nil {
 				return err

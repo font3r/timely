@@ -1,7 +1,6 @@
 package scheduler
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,58 +10,31 @@ import (
 	"github.com/google/uuid"
 )
 
-type SchedulerState string
-
-const (
-	Running SchedulerState = "running"
-	Stopped SchedulerState = "stopped"
-)
-
 type Scheduler struct {
-	Id     uuid.UUID
-	state  SchedulerState
-	ctx    context.Context
-	cancel context.CancelFunc
+	Id      uuid.UUID
+	Storage *JobStorage
 }
 
 type JobStatusEvent struct {
 	JobSlug string `json:"jobSlug"`
 	Status  string `json:"status"`
+	Reason  string `json:"reason"`
 	Seq     int16  `json:"seq"`
 }
 
 func Start(str *JobStorage) *Scheduler {
-	log.Println("starting scheduler")
-
-	ctx, cancel := context.WithCancel(context.Background())
 	schedulerId := uuid.New()
 	scheduler := Scheduler{
-		Id:     schedulerId,
-		ctx:    ctx,
-		state:  Running,
-		cancel: cancel,
+		Id:      schedulerId,
+		Storage: str,
 	}
 
-	tra, err := NewConnection(1)
+	log.Printf("starting scheduler with id %s\n", schedulerId)
+
+	tra, err := NewConnection()
 	if err != nil {
 		panic(fmt.Sprintf("create transport error %s", err))
 	}
-
-	go func(str *JobStorage, schedulerId uuid.UUID, tra *Transport, ctx context.Context) {
-		tickResult := make(chan error)
-
-		for {
-			select {
-			case <-ctx.Done():
-				log.Println("scheduler stopped on demand")
-				return
-			default:
-				go processTick(str, tra, tickResult)
-				<-tickResult
-				time.Sleep(time.Second)
-			}
-		}
-	}(str, schedulerId, tra, scheduler.ctx)
 
 	err = createInternalExchanges(tra)
 	if err != nil {
@@ -70,37 +42,44 @@ func Start(str *JobStorage) *Scheduler {
 		return nil
 	}
 
+	go func(str *JobStorage, tra *Transport) {
+		tickResult := make(chan error)
+
+		for {
+			select {
+			default:
+				go processTick(str, tra, tickResult)
+
+				err = <-tickResult
+				if err != nil {
+					log.Printf("error during processing tick - %v", err)
+				}
+
+				time.Sleep(time.Second)
+			}
+		}
+	}(str, tra)
+
 	go processJobStatus(tra, str)
 
 	return &scheduler
 }
 
-func (s *Scheduler) Stop() error {
-	if s.state != Running {
-		return fmt.Errorf("invalid scheduler state, expected %s, got %s",
-			Running, s.state)
-	}
-
-	s.state = Stopped
-	s.cancel()
-
-	return nil
-}
-
 func processTick(str *JobStorage, tr *Transport, tickResult chan<- error) {
-	pendingJobs, err := str.GetNew()
-
+	pendingJobs, err := getJobsReadyToSchedule(str)
 	if err != nil {
-		log.Printf("error getting new jobs - %v\n", err)
 		tickResult <- err
-		return
 	}
 
 	for _, j := range pendingJobs {
-		jobResult := make(chan bool)
+		jobResult := make(chan error)
 		go j.Start(tr, jobResult)
 
-		<-jobResult // error check
+		jobStartResult := <-jobResult
+		if jobStartResult != nil {
+			tickResult <- jobStartResult
+			return
+		}
 
 		err = str.UpdateStatus(j)
 		if err != nil {
@@ -133,7 +112,7 @@ func processJobStatus(tra *Transport, storage *JobStorage) {
 			}
 
 			log.Printf("received job status %v\n", jobStatus)
-			status, err := job.ProcessState(jobStatus.Status)
+			status, err := job.ProcessState(jobStatus.Status, jobStatus.Reason)
 
 			if err != nil {
 				return err
@@ -156,6 +135,16 @@ func processJobStatus(tra *Transport, storage *JobStorage) {
 		log.Printf("error during statusing jobs - %v\n", err)
 		return
 	}
+}
+
+func getJobsReadyToSchedule(str *JobStorage) ([]*Job, error) {
+	pendingJobs, err := str.GetNew()
+	if err != nil {
+		log.Printf("error getting new jobs - %v\n", err)
+		return nil, err
+	}
+
+	return pendingJobs, nil
 }
 
 func createInternalExchanges(tran *Transport) error {

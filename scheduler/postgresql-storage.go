@@ -32,8 +32,14 @@ func NewJobStorage(connectionString string) (*JobStorage, error) {
 func (s *JobStorage) GetById(id uuid.UUID) (*Job, error) {
 	var job Job
 
-	err := s.pool.QueryRow(context.Background(), `SELECT * FROM jobs WHERE id = $1`, id).
-		Scan(&job.Id, &job.Slug, &job.Description, &job.Cron, &job.Status, &job.LastExecutionDate, &job.NextExecutionDate)
+	err := s.pool.QueryRow(context.Background(),
+		`SELECT	j.id, j.slug, j.description, j.status, j.reason, j.lastexecutiondate, j.nextexecutiondate, js.frequency
+			FROM jobs AS j
+			JOIN jobschedule AS js
+			ON J.id = JS.jobId WHERE j.id = $1`, id).
+		Scan(&job.Id, &job.Slug, &job.Description, &job.Status, &job.Reason, &job.LastExecutionDate,
+			&job.NextExecutionDate, &job.Schedule.Frequency)
+
 	if err != nil {
 		return nil, err
 	}
@@ -44,8 +50,14 @@ func (s *JobStorage) GetById(id uuid.UUID) (*Job, error) {
 func (s *JobStorage) GetBySlug(slug string) (*Job, error) {
 	var job Job
 
-	err := s.pool.QueryRow(context.Background(), `SELECT * FROM jobs WHERE slug = $1`, slug).
-		Scan(&job.Id, &job.Slug, &job.Description, &job.Cron, &job.Status, &job.LastExecutionDate, &job.NextExecutionDate)
+	err := s.pool.QueryRow(context.Background(),
+		`SELECT j.id, j.slug, j.description, j.status, j.reason, j.lastexecutiondate, j.nextexecutiondate
+			FROM jobs AS j
+			JOIN jobschedule AS js
+			ON J.id = JS.jobId WHERE j.slug = $1`, slug).
+		Scan(&job.Id, &job.Slug, &job.Description, &job.Status, &job.Reason, &job.LastExecutionDate,
+			&job.NextExecutionDate)
+
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +75,7 @@ func (s *JobStorage) GetNew() ([]*Job, error) {
 	jobs := make([]*Job, 0)
 	for rows.Next() {
 		var job Job
-		err = rows.Scan(&job.Id, &job.Slug, &job.Description, &job.Cron, &job.Status,
+		err = rows.Scan(&job.Id, &job.Slug, &job.Description, &job.Status, &job.Reason,
 			&job.LastExecutionDate, &job.NextExecutionDate)
 
 		if err != nil {
@@ -77,7 +89,11 @@ func (s *JobStorage) GetNew() ([]*Job, error) {
 }
 
 func (s *JobStorage) GetAll() ([]*Job, error) {
-	rows, err := s.pool.Query(context.Background(), `SELECT * FROM jobs`)
+	rows, err := s.pool.Query(context.Background(), `
+		SELECT j.id, j.slug, j.description, j.status, j.reason, j.lastexecutiondate, j.nextexecutiondate, js.frequency
+			FROM jobs AS j
+			JOIN jobschedule AS js
+			ON J.id = JS.jobId`)
 
 	if err != nil {
 		return nil, err
@@ -86,8 +102,8 @@ func (s *JobStorage) GetAll() ([]*Job, error) {
 	jobs := make([]*Job, 0)
 	for rows.Next() {
 		var job Job
-		err = rows.Scan(&job.Id, &job.Slug, &job.Description, &job.Cron, &job.Status,
-			&job.LastExecutionDate, &job.NextExecutionDate)
+		err = rows.Scan(&job.Id, &job.Slug, &job.Description, &job.Status, &job.Reason,
+			&job.LastExecutionDate, &job.NextExecutionDate, &job.Schedule.Frequency)
 
 		if err != nil {
 			return nil, err
@@ -98,9 +114,17 @@ func (s *JobStorage) GetAll() ([]*Job, error) {
 }
 
 func (s *JobStorage) Add(job Job) error {
-	_, err := s.pool.Exec(context.Background(),
+	// TX, batches etc
+	conn, err := s.pool.Acquire(context.Background())
+	if err != nil {
+		return err
+	}
+
+	defer conn.Release()
+
+	_, err = conn.Exec(context.Background(),
 		"INSERT INTO jobs VALUES ($1, $2, $3, $4, $5, $6, $7)",
-		job.Id, job.Slug, job.Description, job.Cron, job.Status, job.LastExecutionDate, job.NextExecutionDate)
+		job.Id, job.Slug, job.Description, job.Status, job.Reason, job.LastExecutionDate, job.NextExecutionDate)
 
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -111,11 +135,19 @@ func (s *JobStorage) Add(job Job) error {
 		return err
 	}
 
+	_, err = conn.Exec(context.Background(),
+		"INSERT INTO jobschedule VALUES ($1, $2, $3)", uuid.New(), job.Id, job.Schedule.Frequency)
+
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
 func (s *JobStorage) UpdateStatus(job *Job) error {
-	_, err := s.pool.Exec(context.Background(), `UPDATE jobs SET status = $1 WHERE id = $2`, job.Status, job.Id)
+	_, err := s.pool.Exec(context.Background(), `UPDATE jobs SET status = $1, reason = $2 WHERE id = $3`,
+		job.Status, job.Reason, job.Id)
 
 	if err != nil {
 		return err

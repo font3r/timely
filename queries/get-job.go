@@ -15,9 +15,14 @@ type JobDto struct {
 	Slug              string              `json:"slug"`
 	Description       string              `json:"description"`
 	Status            scheduler.JobStatus `json:"status"`
-	Cron              string              `json:"cron"`
+	Reason            string              `json:"reason"`
+	Schedule          ScheduleDto         `json:"schedule"`
 	LastExecutionDate time.Time           `json:"lastExecutionDate"`
 	NextExecutionDate time.Time           `json:"nextExecutionDate"`
+}
+
+type ScheduleDto struct {
+	Frequency string `json:"frequency"`
 }
 
 func GetJob(req *http.Request, str *scheduler.JobStorage) (JobDto, error) {
@@ -42,7 +47,8 @@ func GetJob(req *http.Request, str *scheduler.JobStorage) (JobDto, error) {
 		Slug:              job.Slug,
 		Description:       job.Description,
 		Status:            job.Status,
-		Cron:              job.Cron,
+		Reason:            job.Reason,
+		Schedule:          ScheduleDto{Frequency: job.Schedule.Frequency},
 		LastExecutionDate: job.LastExecutionDate,
 		NextExecutionDate: job.NextExecutionDate,
 	}, nil

@@ -12,7 +12,9 @@ Content-Type: application/json
 {
     "slug": "test-example-job-1",
     "description": "test job description",
-    "cron": "*"
+    "schedule": {
+        "frequency": "once"
+    }
 }
 
 ### Stop scheduler

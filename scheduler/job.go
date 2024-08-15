@@ -20,7 +20,7 @@ type StartJobMessage struct {
 
 const (
 	New        JobStatus = "new"        // created, waiting to schedule
-	Scheduled  JobStatus = "scheduled"  // scheduled, waiting for result
+	Scheduled  JobStatus = "scheduled"  // scheduled, waiting for application status
 	Processing JobStatus = "processing" // during processing
 	Finished   JobStatus = "finished"   // successfully processed
 	Failed     JobStatus = "failed"     // error during processing
@@ -31,26 +31,32 @@ type Job struct {
 	Slug              string
 	Description       string
 	Status            JobStatus
-	Cron              string
+	Reason            string
+	Schedule          Schedule
 	LastExecutionDate time.Time
 	NextExecutionDate time.Time
 }
 
-func NewJob(slug, description, cron string) Job {
+type Schedule struct {
+	Frequency string
+}
+
+func NewJob(slug, description string, schedule Schedule) Job {
 	return Job{
 		Id:                uuid.New(),
 		Slug:              slug,
 		Description:       description,
 		Status:            New,
-		Cron:              cron,
+		Schedule:          schedule,
 		LastExecutionDate: time.Now(),
 		NextExecutionDate: time.Now(),
 	}
 }
 
-func (j *Job) Start(t *Transport, result chan bool) {
+func (j *Job) Start(t *Transport, result chan<- error) {
 	err := t.BindQueue(j.Slug, string(ExchangeJobSchedule), j.Slug)
 	if err != nil {
+		result <- err
 		return
 	}
 
@@ -65,15 +71,14 @@ func (j *Job) Start(t *Transport, result chan bool) {
 		log.Printf("failed to start job %v", err)
 		j.Status = Failed
 
-		result <- false
-
+		result <- err
 		return
 	}
 
-	result <- true
+	result <- nil
 }
 
-func (j *Job) ProcessState(status string) (JobStatus, error) {
+func (j *Job) ProcessState(status, reason string) (JobStatus, error) {
 	if j.Status == Finished || j.Status == Failed {
 		return "", ErrJobCycleFinished
 	}
@@ -87,6 +92,7 @@ func (j *Job) ProcessState(status string) (JobStatus, error) {
 		return j.Status, nil
 	case string(Failed):
 		j.Status = Failed // TODO: requirement - what if failure occurs
+		j.Reason = reason
 		return j.Status, nil
 	default:
 		return "", ErrJobInvalidStatus

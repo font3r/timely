@@ -9,9 +9,13 @@ import (
 )
 
 type CreateJobCommand struct {
-	Slug        string `json:"slug"`
-	Description string `json:"description"`
-	Cron        string `json:"cron"`
+	Slug        string                   `json:"slug"`
+	Description string                   `json:"description"`
+	Schedule    JobScheduleConfiguration `json:"schedule"`
+}
+
+type JobScheduleConfiguration struct {
+	Frequency string `json:"frequency"`
 }
 
 type CreateJobCommandResponse struct {
@@ -24,7 +28,8 @@ func CreateJob(req *http.Request, str *scheduler.JobStorage) (*CreateJobCommandR
 		return nil, err
 	}
 
-	job := scheduler.NewJob(comm.Slug, comm.Description, comm.Cron)
+	job := scheduler.NewJob(comm.Slug, comm.Description,
+		scheduler.Schedule{Frequency: comm.Schedule.Frequency})
 	err = str.Add(job)
 	if err != nil {
 		return nil, err
@@ -49,8 +54,16 @@ func validate(req *http.Request) (*CreateJobCommand, error) {
 		return nil, errors.New("invalid description")
 	}
 
-	if comm.Cron == "" {
-		return nil, errors.New("invalid cron")
+	if comm.Schedule == (JobScheduleConfiguration{}) {
+		return nil, errors.New("missing job configuration")
+	}
+
+	if comm.Schedule.Frequency == "" {
+		return nil, errors.New("missing job frequency configuration")
+	}
+
+	if comm.Schedule.Frequency != "once" {
+		return nil, errors.New("invalid job frequency configuration")
 	}
 
 	return comm, nil

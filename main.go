@@ -12,6 +12,10 @@ import (
 	"github.com/gorilla/mux"
 )
 
+type Application struct {
+	Scheduler *scheduler.Scheduler
+}
+
 func main() {
 	r := mux.NewRouter()
 	srv := &http.Server{
@@ -24,12 +28,24 @@ func main() {
 		log.Fatal(err)
 	}
 
-	s := scheduler.Start(storage)
+	app := &Application{
+		Scheduler: scheduler.Start(storage),
+	}
 
-	v1 := r.PathPrefix("/api/v1").Subrouter()
+	registerRoutes(r, app)
+	go testjobhandler.Start()
+
+	log.Printf("listening on %v", srv.Addr)
+	if err := srv.ListenAndServe(); err != nil {
+		log.Println(err)
+	}
+}
+
+func registerRoutes(router *mux.Router, app *Application) {
+	v1 := router.PathPrefix("/api/v1").Subrouter()
 
 	v1.HandleFunc("/jobs/{id}", func(w http.ResponseWriter, req *http.Request) {
-		result, err := queries.GetJob(req, storage)
+		result, err := queries.GetJob(req, app.Scheduler.Storage)
 		if err != nil {
 			problem(w, err)
 			return
@@ -39,7 +55,7 @@ func main() {
 	}).Methods("GET")
 
 	v1.HandleFunc("/jobs", func(w http.ResponseWriter, req *http.Request) {
-		result, err := commands.CreateJob(req, storage)
+		result, err := commands.CreateJob(req, app.Scheduler.Storage)
 		if err != nil {
 			problem(w, err)
 			return
@@ -47,20 +63,6 @@ func main() {
 
 		success(w, result)
 	}).Headers(scheduler.ContentTypeHeader, scheduler.ApplicationJson).Methods("POST")
-
-	v1.HandleFunc("/scheduler/stop", func(w http.ResponseWriter, r *http.Request) {
-		err := s.Stop()
-		if err != nil {
-			problem(w, err)
-		}
-	}).Methods("PATCH")
-
-	go testjobhandler.Start()
-
-	log.Printf("listening on %v", srv.Addr)
-	if err := srv.ListenAndServe(); err != nil {
-		log.Println(err)
-	}
 }
 
 func success(w http.ResponseWriter, data any) {
