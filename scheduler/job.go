@@ -33,8 +33,8 @@ type Job struct {
 	Status            JobStatus
 	Reason            string
 	Schedule          Schedule
-	LastExecutionDate time.Time
-	NextExecutionDate time.Time
+	LastExecutionDate *time.Time
+	NextExecutionDate *time.Time
 }
 
 type Schedule struct {
@@ -48,8 +48,8 @@ func NewJob(slug, description string, schedule Schedule) Job {
 		Description:       description,
 		Status:            New,
 		Schedule:          schedule,
-		LastExecutionDate: time.Now(),
-		NextExecutionDate: time.Now(),
+		LastExecutionDate: nil,
+		NextExecutionDate: nil,
 	}
 }
 
@@ -75,7 +75,14 @@ func (j *Job) Start(t *Transport, result chan<- error) {
 		return
 	}
 
+	timeNow := time.Now()
+	j.LastExecutionDate = &timeNow
+
 	result <- nil
+}
+
+func toTimePtr(t time.Time) *time.Time {
+	return &t
 }
 
 func (j *Job) ProcessState(status, reason string) (JobStatus, error) {

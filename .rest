@@ -4,6 +4,9 @@
 ### Get jobs
 GET {{baseAddress}}/api/v1/jobs/{{jobId}}
 
+### Get jobs
+GET {{baseAddress}}/api/v1/jobs
+
 ### Create job
 # @name job
 POST {{baseAddress}}/api/v1/jobs
@@ -16,7 +19,3 @@ Content-Type: application/json
         "frequency": "once"
     }
 }
-
-### Stop scheduler
-PATCH {{baseAddress}}/api/v1/scheduler/stop
-Content-Type: application/json

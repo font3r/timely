@@ -17,8 +17,8 @@ type JobDto struct {
 	Status            scheduler.JobStatus `json:"status"`
 	Reason            string              `json:"reason"`
 	Schedule          ScheduleDto         `json:"schedule"`
-	LastExecutionDate time.Time           `json:"lastExecutionDate"`
-	NextExecutionDate time.Time           `json:"nextExecutionDate"`
+	LastExecutionDate *time.Time          `json:"lastExecutionDate"`
+	NextExecutionDate *time.Time          `json:"nextExecutionDate"`
 }
 
 type ScheduleDto struct {

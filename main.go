@@ -63,6 +63,16 @@ func registerRoutes(router *mux.Router, app *Application) {
 
 		success(w, result)
 	}).Headers(scheduler.ContentTypeHeader, scheduler.ApplicationJson).Methods("POST")
+
+	v1.HandleFunc("/jobs", func(w http.ResponseWriter, req *http.Request) {
+		result, err := queries.GetJobs(app.Scheduler.Storage)
+		if err != nil {
+			problem(w, err)
+			return
+		}
+
+		success(w, result)
+	}).Methods("GET")
 }
 
 func success(w http.ResponseWriter, data any) {
