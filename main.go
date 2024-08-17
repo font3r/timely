@@ -2,6 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
+	"github.com/spf13/viper"
 	"log"
 	"net/http"
 	testjobhandler "timely/cmd"
@@ -17,19 +20,26 @@ type Application struct {
 }
 
 func main() {
+	loadConfig()
+
 	r := mux.NewRouter()
 	srv := &http.Server{
 		Addr:    ":5000",
 		Handler: r,
 	}
 
-	storage, err := scheduler.NewJobStorage("postgres://postgres:password@127.0.0.1:5432/Timely")
+	storage, err := scheduler.NewJobStorage(viper.GetString("database.connectionString"))
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	transport, err := scheduler.NewConnection(viper.GetString("transport.rabbitmq.connectionString"))
+	if err != nil {
+		panic(fmt.Sprintf("create transport error %s", err))
+	}
+
 	app := &Application{
-		Scheduler: scheduler.Start(storage),
+		Scheduler: scheduler.Start(storage, transport),
 	}
 
 	registerRoutes(r, app)
@@ -38,6 +48,21 @@ func main() {
 	log.Printf("listening on %v", srv.Addr)
 	if err := srv.ListenAndServe(); err != nil {
 		log.Println(err)
+	}
+}
+
+func loadConfig() {
+	viper.SetConfigName("config")
+	viper.SetConfigType("json")
+	viper.AddConfigPath(".")
+
+	if err := viper.ReadInConfig(); err != nil {
+		var configFileNotFoundError viper.ConfigFileNotFoundError
+		if errors.As(err, &configFileNotFoundError) {
+			log.Panicf("No config file found - %s", err)
+		} else {
+			log.Panicf("Config file error - %s", err)
+		}
 	}
 }
 

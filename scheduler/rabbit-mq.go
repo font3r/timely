@@ -22,8 +22,8 @@ type Transport struct {
 // TODO: requirement - autocrete exchange/queue, some of the queues are temporary (one-time job),
 // other are durable for cyclic jobs (both types should be created at api call)
 
-func NewConnection() (*Transport, error) {
-	connection, err := amqp.Dial("amqp://guest:guest@localhost:5672")
+func NewConnection(url string) (*Transport, error) {
+	connection, err := amqp.Dial(url)
 	if err != nil {
 		log.Printf("error during opening rabbitmq connection - %v", err)
 		return nil, err
@@ -44,11 +44,6 @@ func NewConnection() (*Transport, error) {
 }
 
 func (transport *Transport) Publish(exchange, routingKey string, message any) error {
-	err := transport.CreateExchange(exchange)
-	if err != nil {
-		return err
-	}
-
 	data, err := json.Marshal(message)
 	if err != nil {
 		return errors.New("invalid message format")

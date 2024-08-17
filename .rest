@@ -1,21 +1,21 @@
 @baseAddress = http://localhost:5000
-@jobId = {{job.response.body.id}}
+@scheduleId = {{schedule.response.body.id}}
 
-### Get jobs
-GET {{baseAddress}}/api/v1/jobs/{{jobId}}
+### Get schedule
+GET {{baseAddress}}/api/v1/schedules/{{scheduleId}}
 
-### Get jobs
-GET {{baseAddress}}/api/v1/jobs
+### Get schedules
+GET {{baseAddress}}/api/v1/schedules
 
-### Create job
-# @name job
-POST {{baseAddress}}/api/v1/jobs
+### Create schedule
+# @name schedule
+POST {{baseAddress}}/api/v1/schedules
 Content-Type: application/json
 
 {
-    "slug": "test-example-job-1",
     "description": "test job description",
-    "schedule": {
-        "frequency": "once"
+    "frequency": "once",
+    "job": {
+        "slug": "test-example-job-1"
     }
 }

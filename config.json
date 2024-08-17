@@ -1,0 +1,10 @@
+{
+  "database": {
+    "connectionString": "postgres://postgres:password@127.0.0.1:5432/Timely"
+  },
+  "transport": {
+    "rabbitmq": {
+      "connectionString": "amqp://guest:guest@localhost:5672"
+    }
+  }
+}

@@ -3,7 +3,6 @@ package scheduler
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log"
 	"time"
 
@@ -11,8 +10,9 @@ import (
 )
 
 type Scheduler struct {
-	Id      uuid.UUID
-	Storage *JobStorage
+	Id        uuid.UUID
+	Storage   *JobStorage
+	Transport *Transport
 }
 
 type JobStatusEvent struct {
@@ -22,21 +22,17 @@ type JobStatusEvent struct {
 	Seq     int16  `json:"seq"`
 }
 
-func Start(str *JobStorage) *Scheduler {
+func Start(str *JobStorage, tra *Transport) *Scheduler {
 	schedulerId := uuid.New()
 	scheduler := Scheduler{
-		Id:      schedulerId,
-		Storage: str,
+		Id:        schedulerId,
+		Storage:   str,
+		Transport: tra,
 	}
 
 	log.Printf("starting scheduler with id %s\n", schedulerId)
 
-	tra, err := NewConnection()
-	if err != nil {
-		panic(fmt.Sprintf("create transport error %s", err))
-	}
-
-	err = createInternalExchanges(tra)
+	err := createTransportDependencies(tra)
 	if err != nil {
 		log.Printf("error during creating internal exchanges/queues - %v", err)
 		return nil
@@ -147,7 +143,7 @@ func getJobsReadyToSchedule(str *JobStorage) ([]*Job, error) {
 	return pendingJobs, nil
 }
 
-func createInternalExchanges(tran *Transport) error {
+func createTransportDependencies(tran *Transport) error {
 	err := tran.CreateExchange(string(ExchangeJobSchedule))
 	if err != nil {
 		return nil
