@@ -12,11 +12,11 @@ var (
 	ErrJobInvalidStatus = &Error{Code: "INVALID_JOB_STATUS", Message: "invalid job status"}
 )
 
-type JobStatus string
-
 type StartJobMessage struct {
 	JobName string `json:"jobName"`
 }
+
+type JobStatus string
 
 const (
 	New        JobStatus = "new"        // created, waiting to schedule
@@ -26,30 +26,35 @@ const (
 	Failed     JobStatus = "failed"     // error during processing
 )
 
-type Job struct {
+type Schedule struct {
 	Id                uuid.UUID
-	Slug              string
 	Description       string
-	Status            JobStatus
-	Reason            string
-	Schedule          Schedule
+	Frequency         string
 	LastExecutionDate *time.Time
 	NextExecutionDate *time.Time
+	Job               *Job
 }
 
-type Schedule struct {
-	Frequency string
+type Job struct {
+	Id     uuid.UUID
+	Slug   string
+	Status JobStatus
+	Reason string
 }
 
-func NewJob(slug, description string, schedule Schedule) Job {
-	return Job{
+func NewSchedule(description, frequency, slug string) Schedule {
+	return Schedule{
 		Id:                uuid.New(),
-		Slug:              slug,
 		Description:       description,
-		Status:            New,
-		Schedule:          schedule,
+		Frequency:         frequency,
 		LastExecutionDate: nil,
 		NextExecutionDate: nil,
+		Job: &Job{
+			Id:     uuid.New(),
+			Slug:   slug,
+			Status: New,
+			Reason: "",
+		},
 	}
 }
 
@@ -75,14 +80,7 @@ func (j *Job) Start(t *Transport, result chan<- error) {
 		return
 	}
 
-	timeNow := time.Now()
-	j.LastExecutionDate = &timeNow
-
 	result <- nil
-}
-
-func toTimePtr(t time.Time) *time.Time {
-	return &t
 }
 
 func (j *Job) ProcessState(status, reason string) (JobStatus, error) {
@@ -96,6 +94,7 @@ func (j *Job) ProcessState(status, reason string) (JobStatus, error) {
 		return j.Status, nil
 	case string(Finished):
 		j.Status = Finished
+		j.Reason = reason
 		return j.Status, nil
 	case string(Failed):
 		j.Status = Failed // TODO: requirement - what if failure occurs

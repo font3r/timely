@@ -3,6 +3,7 @@ package test_job_handler
 import (
 	"errors"
 	"fmt"
+	"github.com/spf13/viper"
 	"log"
 	"math/rand"
 	"time"
@@ -19,23 +20,30 @@ type JobStatusEvent struct {
 func Start() {
 	log.Println("test-app: starting ...")
 
-	tra, err := scheduler.NewConnection()
+	tra, err := scheduler.NewConnection(viper.GetString("transport.rabbitmq.connectionString"))
 	if err != nil {
 		panic(fmt.Sprintf("test-app: create transport error %s", err))
 	}
 
 	for _, jobSlug := range []string{"test-example-job-1", "test-example-job-2"} {
 		log.Printf("test-app: test app registered %s", jobSlug)
-		go tra.Subscribe(jobSlug, func(jobSlug string, message []byte) error {
-			log.Printf("test-app: requested job start with slug %s", jobSlug)
+		go func(jobSlug string) {
+			err = tra.Subscribe(jobSlug, func(jobSlug string, message []byte) error {
+				log.Printf("test-app: requested job start with slug %s", jobSlug)
 
-			err = processMockJob(tra, jobSlug)
+				err = processMockJob(tra, jobSlug)
+				if err != nil {
+					log.Printf("test-app: error during job processing %s", err)
+				}
+
+				return nil
+			})
+
 			if err != nil {
-				log.Printf("test-app: error during job processing %s", err)
+				log.Printf("test-app: error during subscribe for job %s", jobSlug)
+				return
 			}
-
-			return nil
-		})
+		}(jobSlug)
 	}
 }
 
@@ -78,6 +86,7 @@ func processMockJob(tra *scheduler.Transport, jobSlug string) error {
 		string(scheduler.RoutingKeyJobStatus), JobStatusEvent{
 			JobSlug: jobSlug,
 			Status:  "finished",
+			Reason:  "success",
 			Seq:     seq,
 		})
 

@@ -44,8 +44,8 @@ func main() {
 func registerRoutes(router *mux.Router, app *Application) {
 	v1 := router.PathPrefix("/api/v1").Subrouter()
 
-	v1.HandleFunc("/jobs/{id}", func(w http.ResponseWriter, req *http.Request) {
-		result, err := queries.GetJob(req, app.Scheduler.Storage)
+	v1.HandleFunc("/schedules/{id}", func(w http.ResponseWriter, req *http.Request) {
+		result, err := queries.GetSchedule(req, app.Scheduler.Storage)
 		if err != nil {
 			problem(w, err)
 			return
@@ -54,8 +54,8 @@ func registerRoutes(router *mux.Router, app *Application) {
 		success(w, result)
 	}).Methods("GET")
 
-	v1.HandleFunc("/jobs", func(w http.ResponseWriter, req *http.Request) {
-		result, err := commands.CreateJob(req, app.Scheduler.Storage)
+	v1.HandleFunc("/schedules", func(w http.ResponseWriter, req *http.Request) {
+		result, err := commands.CreateSchedule(req, app.Scheduler.Storage, app.Scheduler.Transport)
 		if err != nil {
 			problem(w, err)
 			return
@@ -64,8 +64,8 @@ func registerRoutes(router *mux.Router, app *Application) {
 		success(w, result)
 	}).Headers(scheduler.ContentTypeHeader, scheduler.ApplicationJson).Methods("POST")
 
-	v1.HandleFunc("/jobs", func(w http.ResponseWriter, req *http.Request) {
-		result, err := queries.GetJobs(app.Scheduler.Storage)
+	v1.HandleFunc("/schedules", func(w http.ResponseWriter, req *http.Request) {
+		result, err := queries.GetSchedules(app.Scheduler.Storage)
 		if err != nil {
 			problem(w, err)
 			return

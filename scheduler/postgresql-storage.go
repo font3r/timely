@@ -8,17 +8,17 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type JobStorage struct {
-	pool *pgxpool.Pool
-}
-
 const (
-	UniqueConstrainViolation string = "23505"
+	UniqueConstraintViolation = "23505"
 )
 
 var (
-	ErrJobAlreadyExists = &Error{Code: "JOB_ALREADY_EXISTS", Message: "Specified job already exists"}
+	ErrUniqueConstraintViolation = &Error{Code: "UNIQUE_CONSTRAINT_VIOLATION", Message: "Unique constraint violation"}
 )
+
+type JobStorage struct {
+	pool *pgxpool.Pool
+}
 
 func NewJobStorage(connectionString string) (*JobStorage, error) {
 	dbPool, err := pgxpool.New(context.Background(), connectionString)
@@ -29,30 +29,35 @@ func NewJobStorage(connectionString string) (*JobStorage, error) {
 	return &JobStorage{pool: dbPool}, nil
 }
 
-func (s *JobStorage) GetById(id uuid.UUID) (*Job, error) {
-	var job Job
+func (s *JobStorage) GetScheduleById(id uuid.UUID) (*Schedule, error) {
+	var schedule = Schedule{
+		Job: &Job{},
+	}
 
-	err := s.pool.QueryRow(context.Background(),
-		`SELECT	j.id, j.slug, j.description, j.status, j.reason, j.last_execution_date, j.next_execution_date, js.frequency
-			FROM jobs AS j JOIN job_schedule AS js ON j.id = js.job_id WHERE j.id = $1`, id).
-		Scan(&job.Id, &job.Slug, &job.Description, &job.Status, &job.Reason, &job.LastExecutionDate,
-			&job.NextExecutionDate, &job.Schedule.Frequency)
+	sql := `SELECT js.id, js.description, js.frequency, js.last_execution_date, js.next_execution_date, 
+				j.id, j.slug, j.status, j.reason
+			FROM jobs AS j 
+			JOIN job_schedule AS js ON js.id = j.schedule_id 
+			WHERE js.id = $1`
+
+	err := s.pool.QueryRow(context.Background(), sql, id).
+		Scan(&schedule.Id, &schedule.Description, &schedule.Frequency, &schedule.LastExecutionDate, &schedule.NextExecutionDate,
+			&schedule.Job.Id, &schedule.Job.Slug, &schedule.Job.Status, &schedule.Job.Reason)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return &job, nil
+	return &schedule, nil
 }
 
 func (s *JobStorage) GetBySlug(slug string) (*Job, error) {
 	var job Job
 
-	err := s.pool.QueryRow(context.Background(),
-		`SELECT j.id, j.slug, j.description, j.status, j.reason, j.last_execution_date, j.next_execution_date
-			FROM jobs AS j JOIN job_schedule AS js ON j.id = js.job_id WHERE j.slug = $1`, slug).
-		Scan(&job.Id, &job.Slug, &job.Description, &job.Status, &job.Reason, &job.LastExecutionDate,
-			&job.NextExecutionDate)
+	sql := `SELECT id, slug, status, reason FROM jobs WHERE slug = $1`
+
+	err := s.pool.QueryRow(context.Background(), sql, slug).
+		Scan(&job.Id, &job.Slug, &job.Status, &job.Reason)
 
 	if err != nil {
 		return nil, err
@@ -62,7 +67,7 @@ func (s *JobStorage) GetBySlug(slug string) (*Job, error) {
 }
 
 func (s *JobStorage) GetNew() ([]*Job, error) {
-	rows, err := s.pool.Query(context.Background(), `SELECT * FROM jobs WHERE status = $1`, New)
+	rows, err := s.pool.Query(context.Background(), `SELECT id, slug, status FROM jobs WHERE status = $1`, New)
 
 	if err != nil {
 		return nil, err
@@ -71,8 +76,7 @@ func (s *JobStorage) GetNew() ([]*Job, error) {
 	jobs := make([]*Job, 0)
 	for rows.Next() {
 		var job Job
-		err = rows.Scan(&job.Id, &job.Slug, &job.Description, &job.Status, &job.Reason,
-			&job.LastExecutionDate, &job.NextExecutionDate)
+		err = rows.Scan(&job.Id, &job.Slug, &job.Status)
 
 		if err != nil {
 			return nil, err
@@ -84,32 +88,37 @@ func (s *JobStorage) GetNew() ([]*Job, error) {
 	return jobs, nil
 }
 
-func (s *JobStorage) GetAll() ([]*Job, error) {
-	rows, err := s.pool.Query(context.Background(), `
-		SELECT j.id, j.slug, j.description, j.status, j.reason, j.last_execution_date, j.next_execution_date, 
-			js.frequency FROM jobs AS j JOIN job_schedule AS js ON J.id = JS.job_id`)
+func (s *JobStorage) GetAll() ([]*Schedule, error) {
+	sql := `SELECT js.id, js.description, js.frequency, js.last_execution_date, js.next_execution_date, 
+				j.id, j.slug, j.status, j.reason
+			FROM jobs AS j 
+			JOIN job_schedule AS js ON js.id = j.schedule_id`
+
+	rows, err := s.pool.Query(context.Background(), sql)
 
 	if err != nil {
 		return nil, err
 	}
 
-	jobs := make([]*Job, 0)
+	schedules := make([]*Schedule, 0)
 	for rows.Next() {
-		var job Job
-		err = rows.Scan(&job.Id, &job.Slug, &job.Description, &job.Status, &job.Reason,
-			&job.LastExecutionDate, &job.NextExecutionDate, &job.Schedule.Frequency)
+		var schedule = Schedule{
+			Job: &Job{},
+		}
+		err = rows.Scan(&schedule.Id, &schedule.Description, &schedule.Frequency, &schedule.LastExecutionDate,
+			&schedule.NextExecutionDate, &schedule.Job.Id, &schedule.Job.Slug, &schedule.Job.Status, &schedule.Job.Reason)
 
 		if err != nil {
 			return nil, err
 		}
 
-		jobs = append(jobs, &job)
+		schedules = append(schedules, &schedule)
 	}
 
-	return jobs, nil
+	return schedules, nil
 }
 
-func (s *JobStorage) Add(job Job) error {
+func (s *JobStorage) Add(schedule Schedule) error {
 	// TX, batches etc
 	conn, err := s.pool.Acquire(context.Background())
 	if err != nil {
@@ -119,22 +128,23 @@ func (s *JobStorage) Add(job Job) error {
 	defer conn.Release()
 
 	_, err = conn.Exec(context.Background(),
-		"INSERT INTO jobs VALUES ($1, $2, $3, $4, $5, $6, $7)",
-		job.Id, job.Slug, job.Description, job.Status, job.Reason, job.LastExecutionDate, job.NextExecutionDate)
+		"INSERT INTO job_schedule VALUES ($1, $2, $3, $4, $5)",
+		schedule.Id, schedule.Description, schedule.Frequency, schedule.LastExecutionDate, schedule.NextExecutionDate)
 
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == UniqueConstrainViolation {
-			return ErrJobAlreadyExists
-		}
-
 		return err
 	}
 
 	_, err = conn.Exec(context.Background(),
-		"INSERT INTO job_schedule VALUES ($1, $2, $3)", uuid.New(), job.Id, job.Schedule.Frequency)
+		"INSERT INTO jobs VALUES ($1, $2, $3, $4, $5)", schedule.Job.Id, schedule.Id, schedule.Job.Slug,
+		schedule.Job.Status, schedule.Job.Reason)
 
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == UniqueConstraintViolation {
+			return ErrUniqueConstraintViolation
+		}
+
 		return err
 	}
 
@@ -142,9 +152,8 @@ func (s *JobStorage) Add(job Job) error {
 }
 
 func (s *JobStorage) UpdateStatus(job *Job) error {
-	_, err := s.pool.Exec(context.Background(), `UPDATE jobs SET status = $1, 
-		reason = $2, last_execution_date = $3 WHERE id = $4`,
-		job.Status, job.Reason, job.LastExecutionDate, job.Id)
+	_, err := s.pool.Exec(context.Background(), `UPDATE jobs SET status = $1, reason = $2 WHERE id = $3`,
+		job.Status, job.Reason, job.Id)
 
 	if err != nil {
 		return err
