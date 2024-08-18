@@ -76,8 +76,23 @@ func registerRoutes(router *mux.Router, app *Application) {
 			return
 		}
 
-		success(w, result)
+		if result == (queries.ScheduleDto{}) {
+			notFound(w)
+			return
+		}
+
+		ok(w, result)
 	}).Methods("GET")
+
+	v1.HandleFunc("/schedules/{id}", func(w http.ResponseWriter, req *http.Request) {
+		err := commands.DeleteSchedule(req, app.Scheduler.Storage)
+		if err != nil {
+			problem(w, err)
+			return
+		}
+
+		noContent(w)
+	}).Methods("DELETE")
 
 	v1.HandleFunc("/schedules", func(w http.ResponseWriter, req *http.Request) {
 		result, err := commands.CreateSchedule(req, app.Scheduler.Storage, app.Scheduler.Transport)
@@ -86,7 +101,7 @@ func registerRoutes(router *mux.Router, app *Application) {
 			return
 		}
 
-		success(w, result)
+		ok(w, result)
 	}).Headers(scheduler.ContentTypeHeader, scheduler.ApplicationJson).Methods("POST")
 
 	v1.HandleFunc("/schedules", func(w http.ResponseWriter, req *http.Request) {
@@ -96,15 +111,24 @@ func registerRoutes(router *mux.Router, app *Application) {
 			return
 		}
 
-		success(w, result)
+		ok(w, result)
 	}).Methods("GET")
 }
 
-func success(w http.ResponseWriter, data any) {
+func ok(w http.ResponseWriter, data any) {
 	w.Header().Set(scheduler.ContentTypeHeader, scheduler.ApplicationJson)
+	w.WriteHeader(http.StatusOK)
 
 	jsonData, _ := json.Marshal(data)
 	w.Write(jsonData)
+}
+
+func noContent(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func notFound(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusNotFound)
 }
 
 func problem(w http.ResponseWriter, err error) {

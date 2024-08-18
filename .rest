@@ -5,6 +5,7 @@
 GET {{baseAddress}}/api/v1/schedules/{{scheduleId}}
 
 ### Get schedules
+# @name schedules
 GET {{baseAddress}}/api/v1/schedules
 
 ### Create schedule
@@ -19,3 +20,6 @@ Content-Type: application/json
         "slug": "test-example-job-1"
     }
 }
+
+### Delete schedule
+DELETE {{baseAddress}}/api/v1/schedules/{{scheduleId}}

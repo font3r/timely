@@ -40,7 +40,7 @@ func GetSchedule(req *http.Request, str *scheduler.JobStorage) (ScheduleDto, err
 	}
 
 	if schedule == nil {
-		return ScheduleDto{}, errors.New("schedule not found")
+		return ScheduleDto{}, nil
 	}
 
 	return ScheduleDto{

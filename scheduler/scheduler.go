@@ -115,7 +115,7 @@ func processJobStatus(tra *Transport, storage *JobStorage) {
 			}
 
 			switch status {
-			case Finished, Failed:
+			case Processing, Finished, Failed:
 				{
 					err = storage.UpdateStatus(job)
 					if err != nil {

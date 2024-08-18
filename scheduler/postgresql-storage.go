@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -45,6 +46,10 @@ func (s *JobStorage) GetScheduleById(id uuid.UUID) (*Schedule, error) {
 			&schedule.Job.Id, &schedule.Job.Slug, &schedule.Job.Status, &schedule.Job.Reason)
 
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+
 		return nil, err
 	}
 
@@ -119,32 +124,76 @@ func (s *JobStorage) GetAll() ([]*Schedule, error) {
 }
 
 func (s *JobStorage) Add(schedule Schedule) error {
-	// TX, batches etc
-	conn, err := s.pool.Acquire(context.Background())
+	tx, err := s.pool.Begin(context.Background())
 	if err != nil {
 		return err
 	}
 
-	defer conn.Release()
-
-	_, err = conn.Exec(context.Background(),
+	_, err = tx.Exec(context.Background(),
 		"INSERT INTO job_schedule VALUES ($1, $2, $3, $4, $5)",
 		schedule.Id, schedule.Description, schedule.Frequency, schedule.LastExecutionDate, schedule.NextExecutionDate)
 
 	if err != nil {
+		if err = tx.Rollback(context.Background()); err != nil {
+			return err
+		}
+
 		return err
 	}
 
-	_, err = conn.Exec(context.Background(),
+	_, err = tx.Exec(context.Background(),
 		"INSERT INTO jobs VALUES ($1, $2, $3, $4, $5)", schedule.Job.Id, schedule.Id, schedule.Job.Slug,
 		schedule.Job.Status, schedule.Job.Reason)
 
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == UniqueConstraintViolation {
+			if err = tx.Rollback(context.Background()); err != nil {
+				return err
+			}
+
 			return ErrUniqueConstraintViolation
 		}
 
+		if err = tx.Rollback(context.Background()); err != nil {
+			return err
+		}
+
+		return err
+	}
+
+	if err = tx.Commit(context.Background()); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *JobStorage) DeleteScheduleById(id uuid.UUID) error {
+	tx, err := s.pool.Begin(context.Background())
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(context.Background(), `DELETE FROM jobs WHERE schedule_id = $1`, id)
+	if err != nil {
+		if err = tx.Rollback(context.Background()); err != nil {
+			return err
+		}
+
+		return err
+	}
+
+	_, err = tx.Exec(context.Background(), `DELETE FROM job_schedule WHERE id = $1`, id)
+	if err != nil {
+		if err = tx.Rollback(context.Background()); err != nil {
+			return err
+		}
+
+		return err
+	}
+
+	if err = tx.Commit(context.Background()); err != nil {
 		return err
 	}
 
