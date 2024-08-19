@@ -11,19 +11,26 @@ import (
 )
 
 type ScheduleDto struct {
-	Id                uuid.UUID  `json:"id"`
-	Description       string     `json:"description"`
-	Frequency         string     `json:"frequency"`
-	LastExecutionDate *time.Time `json:"lastExecutionDate"`
-	NextExecutionDate *time.Time `json:"nextExecutionDate"`
-	Job               JobDto     `json:"job"`
+	Id                uuid.UUID           `json:"id"`
+	Description       string              `json:"description"`
+	Frequency         string              `json:"frequency"`
+	Status            scheduler.JobStatus `json:"status"`
+	Attempt           int                 `json:"attempt"`
+	RetryPolicy       *RetryPolicyDto     `json:"retry_policy"`
+	LastExecutionDate *time.Time          `json:"last_execution_date"`
+	NextExecutionDate *time.Time          `json:"next_execution_date"`
+	Job               JobDto              `json:"job"`
+}
+
+type RetryPolicyDto struct {
+	Strategy scheduler.StrategyType `json:"strategy"`
+	Count    int                    `json:"count"`
+	Interval string                 `json:"interval"`
 }
 
 type JobDto struct {
-	Id     uuid.UUID           `json:"id"`
-	Slug   string              `json:"slug"`
-	Status scheduler.JobStatus `json:"status"`
-	Reason string              `json:"reason"`
+	Id   uuid.UUID `json:"id"`
+	Slug string    `json:"slug"`
 }
 
 func GetSchedule(req *http.Request, str *scheduler.JobStorage) (ScheduleDto, error) {
@@ -43,17 +50,26 @@ func GetSchedule(req *http.Request, str *scheduler.JobStorage) (ScheduleDto, err
 		return ScheduleDto{}, nil
 	}
 
+	var retry *RetryPolicyDto
+	if schedule.RetryPolicy != (scheduler.RetryPolicy{}) {
+		retry = &RetryPolicyDto{
+			Strategy: schedule.RetryPolicy.Strategy,
+			Count:    schedule.RetryPolicy.Count,
+			Interval: schedule.RetryPolicy.Interval,
+		}
+	}
+
 	return ScheduleDto{
 		Id:                schedule.Id,
 		Description:       schedule.Description,
 		Frequency:         schedule.Frequency,
+		Status:            schedule.Status,
+		RetryPolicy:       retry,
 		LastExecutionDate: schedule.LastExecutionDate,
 		NextExecutionDate: schedule.NextExecutionDate,
 		Job: JobDto{
-			Id:     schedule.Job.Id,
-			Slug:   schedule.Job.Slug,
-			Status: schedule.Job.Status,
-			Reason: schedule.Job.Reason,
+			Id:   schedule.Job.Id,
+			Slug: schedule.Job.Slug,
 		},
 	}, nil
 }

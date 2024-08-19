@@ -26,34 +26,44 @@ const (
 	Failed     JobStatus = "failed"     // error during processing
 )
 
+type JobRun struct {
+	Id            uuid.UUID
+	Status        JobStatus
+	Reason        string
+	Attempt       int
+	ExecutionDate time.Time
+}
+
 type Schedule struct {
 	Id                uuid.UUID
 	Description       string
 	Frequency         string
+	Status            JobStatus
+	Attempt           int
+	RetryPolicy       RetryPolicy
 	LastExecutionDate *time.Time
 	NextExecutionDate *time.Time
 	Job               *Job
 }
 
 type Job struct {
-	Id     uuid.UUID
-	Slug   string
-	Status JobStatus
-	Reason string
+	Id   uuid.UUID
+	Slug string
 }
 
-func NewSchedule(description, frequency, slug string) Schedule {
+func NewSchedule(description, frequency, slug string, policy RetryPolicy) Schedule {
 	return Schedule{
 		Id:                uuid.New(),
 		Description:       description,
 		Frequency:         frequency,
+		Status:            New,
+		Attempt:           0,
+		RetryPolicy:       policy,
 		LastExecutionDate: nil,
 		NextExecutionDate: nil,
 		Job: &Job{
-			Id:     uuid.New(),
-			Slug:   slug,
-			Status: New,
-			Reason: "",
+			Id:   uuid.New(),
+			Slug: slug,
 		},
 	}
 }
@@ -65,8 +75,6 @@ func (j *Job) Start(t *Transport, result chan<- error) {
 		return
 	}
 
-	j.Status = Scheduled
-
 	log.Printf("job %s/%s scheduled", j.Id, j.Slug)
 
 	err = t.Publish(string(ExchangeJobSchedule), j.Slug,
@@ -74,33 +82,10 @@ func (j *Job) Start(t *Transport, result chan<- error) {
 
 	if err != nil {
 		log.Printf("failed to start job %v", err)
-		j.Status = Failed
 
 		result <- err
 		return
 	}
 
 	result <- nil
-}
-
-func (j *Job) ProcessState(status, reason string) (JobStatus, error) {
-	if j.Status == Finished || j.Status == Failed {
-		return "", ErrJobCycleFinished
-	}
-
-	switch status {
-	case string(Processing):
-		j.Status = Processing
-		return j.Status, nil
-	case string(Finished):
-		j.Status = Finished
-		j.Reason = reason
-		return j.Status, nil
-	case string(Failed):
-		j.Status = Failed // TODO: requirement - what if failure occurs
-		j.Reason = reason
-		return j.Status, nil
-	default:
-		return "", ErrJobInvalidStatus
-	}
 }

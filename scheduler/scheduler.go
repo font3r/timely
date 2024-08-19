@@ -42,17 +42,14 @@ func Start(str *JobStorage, tra *Transport) *Scheduler {
 		tickResult := make(chan error)
 
 		for {
-			select {
-			default:
-				go processTick(str, tra, tickResult)
+			go processTick(str, tra, tickResult)
 
-				err = <-tickResult
-				if err != nil {
-					log.Printf("error during processing tick - %v", err)
-				}
-
-				time.Sleep(time.Second)
+			err = <-tickResult
+			if err != nil {
+				log.Printf("error during processing tick - %v", err)
 			}
+
+			time.Sleep(time.Second)
 		}
 	}(str, tra)
 
@@ -62,14 +59,14 @@ func Start(str *JobStorage, tra *Transport) *Scheduler {
 }
 
 func processTick(str *JobStorage, tr *Transport, tickResult chan<- error) {
-	pendingJobs, err := getJobsReadyToSchedule(str)
+	schedules, err := getSchedulesReadyToStart(str)
 	if err != nil {
 		tickResult <- err
 	}
 
-	for _, j := range pendingJobs {
+	for _, schedule := range schedules {
 		jobResult := make(chan error)
-		go j.Start(tr, jobResult)
+		go schedule.Job.Start(tr, jobResult)
 
 		jobStartResult := <-jobResult
 		if jobStartResult != nil {
@@ -77,7 +74,10 @@ func processTick(str *JobStorage, tr *Transport, tickResult chan<- error) {
 			return
 		}
 
-		err = str.UpdateStatus(j)
+		schedule.Attempt++
+		schedule.Status = Scheduled
+
+		err = str.UpdateSchedule(schedule)
 		if err != nil {
 			log.Printf("error updating status - %v\n", err)
 			tickResult <- err
@@ -97,31 +97,63 @@ func processJobStatus(tra *Transport, storage *JobStorage) {
 				return err
 			}
 
-			job, err := storage.GetBySlug(jobStatus.JobSlug)
+			schedule, err := storage.GetScheduleByJobSlug(jobStatus.JobSlug)
 			if err != nil {
 				return err
 			}
 
-			if job == nil {
+			if schedule == nil {
 				log.Printf("received status for unregistered job %s", jobStatus.JobSlug)
 				return errors.New("received status for unregistered job")
 			}
 
-			log.Printf("received job status %v\n", jobStatus)
-			status, err := job.ProcessState(jobStatus.Status, jobStatus.Reason)
-
-			if err != nil {
-				return err
+			if schedule.LastExecutionDate == nil {
+				now := time.Now()
+				schedule.LastExecutionDate = &now
 			}
 
-			switch status {
-			case Processing, Finished, Failed:
+			log.Printf("received job status %v\n", jobStatus)
+			switch jobStatus.Status {
+			case string(Processing):
 				{
-					err = storage.UpdateStatus(job)
-					if err != nil {
-						return err
+					schedule.Status = Processing
+				}
+			case string(Failed):
+				{
+					schedule.Status = Failed
+					if schedule.RetryPolicy != (RetryPolicy{}) {
+
+						var next time.Time
+						if schedule.NextExecutionDate != nil {
+							next, err = schedule.RetryPolicy.GetNextExecutionTime(*schedule.NextExecutionDate, schedule.Attempt)
+							if err != nil {
+								return err
+							}
+						} else {
+							next, err = schedule.RetryPolicy.GetNextExecutionTime(*schedule.LastExecutionDate, schedule.Attempt)
+							if err != nil {
+								return err
+							}
+						}
+
+						if next == (time.Time{}) {
+							schedule.NextExecutionDate = nil
+							log.Printf("schedule failed after retrying%v\n", next)
+						} else {
+							schedule.NextExecutionDate = &next
+							log.Printf("schedule retrying at %v\n", next)
+						}
 					}
 				}
+			case string(Finished):
+				{
+					schedule.Status = Finished
+				}
+			}
+
+			err = storage.UpdateSchedule(schedule)
+			if err != nil {
+				return err
 			}
 
 			return nil
@@ -133,14 +165,22 @@ func processJobStatus(tra *Transport, storage *JobStorage) {
 	}
 }
 
-func getJobsReadyToSchedule(str *JobStorage) ([]*Job, error) {
-	pendingJobs, err := str.GetNew()
+func getSchedulesReadyToStart(str *JobStorage) ([]*Schedule, error) {
+	readySchedules, err := str.GetSchedulesWithStatus(New)
 	if err != nil {
 		log.Printf("error getting new jobs - %v\n", err)
 		return nil, err
 	}
 
-	return pendingJobs, nil
+	rescheduleReady, err := str.GetSchedulesReadyToReschedule()
+	if err != nil {
+		log.Printf("error getting new jobs - %v\n", err)
+		return nil, err
+	}
+
+	readySchedules = append(readySchedules, rescheduleReady...)
+
+	return readySchedules, nil
 }
 
 func createTransportDependencies(tran *Transport) error {

@@ -9,6 +9,7 @@ GET {{baseAddress}}/api/v1/schedules/{{scheduleId}}
 GET {{baseAddress}}/api/v1/schedules
 
 ### Create schedule
+# "ns", "us" (or "µs"), "ms", "s", "m", "h".
 # @name schedule
 POST {{baseAddress}}/api/v1/schedules
 Content-Type: application/json
@@ -18,6 +19,11 @@ Content-Type: application/json
     "frequency": "once",
     "job": {
         "slug": "test-example-job-1"
+    },
+    "retry_policy": {
+        "strategy": "constant",
+        "interval": "1m",
+        "count": 25
     }
 }
 

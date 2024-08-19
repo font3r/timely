@@ -50,8 +50,8 @@ func Start() {
 func processMockJob(tra *scheduler.Transport, jobSlug string) error {
 	var seq int16 = 0
 
-	for i := 0; i < 5; i++ {
-		if rand.Intn(4) == 1 { // just random 25% failure rate for testing
+	for i := 0; i < 10; i++ {
+		if rand.Intn(10) <= -1 { // random failure rate for testing
 			err := tra.Publish(string(scheduler.ExchangeJobStatus),
 				string(scheduler.RoutingKeyJobStatus), JobStatusEvent{
 					JobSlug: jobSlug,

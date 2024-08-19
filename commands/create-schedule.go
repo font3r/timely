@@ -9,9 +9,16 @@ import (
 )
 
 type CreateScheduleCommand struct {
-	Description string           `json:"description"`
-	Frequency   string           `json:"frequency"`
-	Job         JobConfiguration `json:"job"`
+	Description string                   `json:"description"`
+	Frequency   string                   `json:"frequency"`
+	Job         JobConfiguration         `json:"job"`
+	RetryPolicy RetryPolicyConfiguration `json:"retry_policy"`
+}
+
+type RetryPolicyConfiguration struct {
+	Strategy scheduler.StrategyType `json:"strategy"` // strategy
+	Count    int                    `json:"count"`    // maximum count of retries
+	Interval string                 `json:"interval"` // base interval for strategy
 }
 
 type JobConfiguration struct {
@@ -32,7 +39,18 @@ func CreateSchedule(req *http.Request, str *scheduler.JobStorage,
 		return nil, err
 	}
 
-	schedule := scheduler.NewSchedule(comm.Description, comm.Frequency, comm.Job.Slug)
+	var retryPolicy scheduler.RetryPolicy
+	if comm.RetryPolicy != (RetryPolicyConfiguration{}) {
+		retryPolicy, err = scheduler.NewRetryPolicy(comm.RetryPolicy.Strategy, comm.RetryPolicy.Count,
+			comm.RetryPolicy.Interval)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		retryPolicy = scheduler.RetryPolicy{}
+	}
+
+	schedule := scheduler.NewSchedule(comm.Description, comm.Frequency, comm.Job.Slug, retryPolicy)
 
 	if err = str.Add(schedule); err != nil {
 		if errors.Is(err, scheduler.ErrUniqueConstraintViolation) {
