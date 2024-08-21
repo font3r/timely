@@ -2,7 +2,6 @@ package scheduler
 
 import (
 	"encoding/json"
-	"errors"
 	"log"
 	"time"
 
@@ -22,6 +21,18 @@ type JobStatusEvent struct {
 	Seq     int16  `json:"seq"`
 }
 
+var (
+	ErrReceivedStatusForUnknownSchedule = &Error{
+		Code:    "UNKNOWN_SCHEDULE",
+		Message: "received status for unknown schedule"}
+	ErrFetchNewSchedules = &Error{
+		Code:    "FETCH_NEW_SCHEDULES_ERROR",
+		Message: "fetch new schedules failed"}
+	ErrFetchFailedSchedules = &Error{
+		Code:    "FETCH_FAILED_SCHEDULES_ERROR",
+		Message: "fetch failed schedules failed"}
+)
+
 func Start(str *JobStorage, tra *Transport) *Scheduler {
 	schedulerId := uuid.New()
 	scheduler := Scheduler{
@@ -34,7 +45,7 @@ func Start(str *JobStorage, tra *Transport) *Scheduler {
 
 	err := createTransportDependencies(tra)
 	if err != nil {
-		log.Printf("error during creating internal exchanges/queues - %v", err)
+		log.Printf("creating internal exchanges/queues error - %v", err)
 		return nil
 	}
 
@@ -46,141 +57,16 @@ func Start(str *JobStorage, tra *Transport) *Scheduler {
 
 			err = <-tickResult
 			if err != nil {
-				log.Printf("error during processing tick - %v", err)
+				log.Printf("processing scheduler tick error - %v", err)
 			}
 
 			time.Sleep(time.Second)
 		}
 	}(str, tra)
 
-	go processJobStatus(tra, str)
+	go processJobEvents(tra, str)
 
 	return &scheduler
-}
-
-func processTick(str *JobStorage, tr *Transport, tickResult chan<- error) {
-	schedules, err := getSchedulesReadyToStart(str)
-	if err != nil {
-		tickResult <- err
-	}
-
-	for _, schedule := range schedules {
-		jobResult := make(chan error)
-		go schedule.Job.Start(tr, jobResult)
-
-		jobStartResult := <-jobResult
-		if jobStartResult != nil {
-			tickResult <- jobStartResult
-			return
-		}
-
-		schedule.Attempt++
-		schedule.Status = Scheduled
-
-		err = str.UpdateSchedule(schedule)
-		if err != nil {
-			log.Printf("error updating status - %v\n", err)
-			tickResult <- err
-			return
-		}
-	}
-
-	tickResult <- nil
-}
-
-func processJobStatus(tra *Transport, storage *JobStorage) {
-	err := tra.Subscribe(string(QueueJobStatus),
-		func(_ string, message []byte) error {
-			jobStatus := JobStatusEvent{}
-			err := json.Unmarshal(message, &jobStatus)
-			if err != nil {
-				return err
-			}
-
-			schedule, err := storage.GetScheduleByJobSlug(jobStatus.JobSlug)
-			if err != nil {
-				return err
-			}
-
-			if schedule == nil {
-				log.Printf("received status for unregistered job %s", jobStatus.JobSlug)
-				return errors.New("received status for unregistered job")
-			}
-
-			if schedule.LastExecutionDate == nil {
-				now := time.Now()
-				schedule.LastExecutionDate = &now
-			}
-
-			log.Printf("received job status %v\n", jobStatus)
-			switch jobStatus.Status {
-			case string(Processing):
-				{
-					schedule.Status = Processing
-				}
-			case string(Failed):
-				{
-					schedule.Status = Failed
-					if schedule.RetryPolicy != (RetryPolicy{}) {
-
-						var next time.Time
-						if schedule.NextExecutionDate != nil {
-							next, err = schedule.RetryPolicy.GetNextExecutionTime(*schedule.NextExecutionDate, schedule.Attempt)
-							if err != nil {
-								return err
-							}
-						} else {
-							next, err = schedule.RetryPolicy.GetNextExecutionTime(*schedule.LastExecutionDate, schedule.Attempt)
-							if err != nil {
-								return err
-							}
-						}
-
-						if next == (time.Time{}) {
-							schedule.NextExecutionDate = nil
-							log.Printf("schedule failed after retrying%v\n", next)
-						} else {
-							schedule.NextExecutionDate = &next
-							log.Printf("schedule retrying at %v\n", next)
-						}
-					}
-				}
-			case string(Finished):
-				{
-					schedule.Status = Finished
-				}
-			}
-
-			err = storage.UpdateSchedule(schedule)
-			if err != nil {
-				return err
-			}
-
-			return nil
-		})
-
-	if err != nil {
-		log.Printf("error during statusing jobs - %v\n", err)
-		return
-	}
-}
-
-func getSchedulesReadyToStart(str *JobStorage) ([]*Schedule, error) {
-	readySchedules, err := str.GetSchedulesWithStatus(New)
-	if err != nil {
-		log.Printf("error getting new jobs - %v\n", err)
-		return nil, err
-	}
-
-	rescheduleReady, err := str.GetSchedulesReadyToReschedule()
-	if err != nil {
-		log.Printf("error getting new jobs - %v\n", err)
-		return nil, err
-	}
-
-	readySchedules = append(readySchedules, rescheduleReady...)
-
-	return readySchedules, nil
 }
 
 func createTransportDependencies(tran *Transport) error {
@@ -206,4 +92,102 @@ func createTransportDependencies(tran *Transport) error {
 	}
 
 	return nil
+}
+
+func processTick(str *JobStorage, tr *Transport, tickResult chan<- error) {
+	schedules, err := getSchedulesReadyToStart(str)
+	if err != nil {
+		tickResult <- err
+		return
+	}
+
+	for _, schedule := range schedules {
+		scheduleResult := make(chan error)
+		go schedule.Start(tr, scheduleResult)
+
+		scheduleStartError := <-scheduleResult
+		if scheduleStartError != nil {
+			tickResult <- scheduleStartError
+			return
+		}
+
+		err = str.UpdateSchedule(schedule)
+		if err != nil {
+			log.Printf("error updating schedule status - %v\n", err)
+			tickResult <- err
+			return
+		}
+	}
+
+	tickResult <- nil
+}
+
+func processJobEvents(tra *Transport, storage *JobStorage) {
+	err := tra.Subscribe(string(QueueJobStatus), func(message []byte) error {
+		return handleJobEvent(message, storage)
+	})
+
+	if err != nil {
+		log.Printf("error during processing job events - %v\n", err)
+		return
+	}
+}
+
+func handleJobEvent(message []byte, storage *JobStorage) error {
+	jobStatus := JobStatusEvent{}
+	err := json.Unmarshal(message, &jobStatus)
+	if err != nil {
+		return err
+	}
+
+	schedule, err := storage.GetScheduleByJobSlug(jobStatus.JobSlug)
+	if err != nil {
+		return err
+	}
+
+	if schedule == nil {
+		return ErrReceivedStatusForUnknownSchedule
+	}
+
+	if schedule.LastExecutionDate == nil {
+		now := time.Now()
+		schedule.LastExecutionDate = &now
+	}
+
+	log.Printf("received job status %v\n", jobStatus)
+	switch jobStatus.Status {
+	case string(Processing):
+		schedule.Status = Processing
+	case string(Failed):
+		if err = schedule.Failed(); err != nil {
+			return err
+		}
+	case string(Finished):
+		schedule.Finished() // TODO: after one time schedules we have to clean transport
+	}
+
+	err = storage.UpdateSchedule(schedule)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func getSchedulesReadyToStart(str *JobStorage) ([]*Schedule, error) {
+	readySchedules, err := str.GetSchedulesWithStatus(New)
+	if err != nil {
+		log.Printf("fetch new schedules error - %v\n", err)
+		return nil, ErrFetchNewSchedules
+	}
+
+	rescheduleReady, err := str.GetSchedulesReadyToReschedule()
+	if err != nil {
+		log.Printf("fetch failed schedules error - %v\n", err)
+		return nil, ErrFetchFailedSchedules
+	}
+
+	readySchedules = append(readySchedules, rescheduleReady...)
+
+	return readySchedules, nil
 }

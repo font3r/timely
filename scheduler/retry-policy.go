@@ -44,18 +44,18 @@ func NewRetryPolicy(strategyType StrategyType, count int, interval string) (Retr
 	}, nil
 }
 
-func (p RetryPolicy) GetNextExecutionTime(executionDate time.Time, attempt int) (time.Time, error) {
-	d, err := time.ParseDuration(p.Interval)
+func (rp RetryPolicy) GetNextExecutionTime(executionDate time.Time, attempt int) (time.Time, error) {
+	d, err := time.ParseDuration(rp.Interval)
 	if err != nil {
 		return time.Time{}, errors.New("invalid interval")
 	}
 
 	// maximum policy count reached
-	if attempt > p.Count {
+	if attempt > rp.Count {
 		return time.Time{}, nil
 	}
 
-	switch p.Strategy {
+	switch rp.Strategy {
 	case Constant:
 		{
 			return executionDate.Add(d), nil

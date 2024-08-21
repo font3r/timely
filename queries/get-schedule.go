@@ -11,15 +11,15 @@ import (
 )
 
 type ScheduleDto struct {
-	Id                uuid.UUID           `json:"id"`
-	Description       string              `json:"description"`
-	Frequency         string              `json:"frequency"`
-	Status            scheduler.JobStatus `json:"status"`
-	Attempt           int                 `json:"attempt"`
-	RetryPolicy       *RetryPolicyDto     `json:"retry_policy"`
-	LastExecutionDate *time.Time          `json:"last_execution_date"`
-	NextExecutionDate *time.Time          `json:"next_execution_date"`
-	Job               JobDto              `json:"job"`
+	Id                uuid.UUID                `json:"id"`
+	Description       string                   `json:"description"`
+	Frequency         string                   `json:"frequency"`
+	Status            scheduler.ScheduleStatus `json:"status"`
+	Attempt           int                      `json:"attempt"`
+	RetryPolicy       *RetryPolicyDto          `json:"retry_policy"`
+	LastExecutionDate *time.Time               `json:"last_execution_date"`
+	NextExecutionDate *time.Time               `json:"next_execution_date"`
+	Job               JobDto                   `json:"job"`
 }
 
 type RetryPolicyDto struct {

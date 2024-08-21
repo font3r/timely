@@ -28,7 +28,7 @@ func Start() {
 	for _, jobSlug := range []string{"test-example-job-1", "test-example-job-2"} {
 		log.Printf("test-app: test app registered %s", jobSlug)
 		go func(jobSlug string) {
-			err = tra.Subscribe(jobSlug, func(jobSlug string, message []byte) error {
+			err = tra.Subscribe(jobSlug, func(message []byte) error {
 				log.Printf("test-app: requested job start with slug %s", jobSlug)
 
 				err = processMockJob(tra, jobSlug)

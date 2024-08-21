@@ -14,13 +14,10 @@ import (
 
 type Transport struct {
 	connection        *amqp.Connection
-	channel           *amqp.Channel // TODO: performace - support for multiple channels
-	declaredQueues    []string      // TODO: should we go for explicit/implicit queue/exchange declaration?
+	channel           *amqp.Channel // TODO: performace - support for multiple channels - channel is very fragile, closed on error
+	declaredQueues    []string
 	declaredExchanges []string
 }
-
-// TODO: requirement - autocrete exchange/queue, some of the queues are temporary (one-time job),
-// other are durable for cyclic jobs (both types should be created at api call)
 
 func NewConnection(url string) (*Transport, error) {
 	connection, err := amqp.Dial(url)
@@ -43,7 +40,7 @@ func NewConnection(url string) (*Transport, error) {
 	return transport, nil
 }
 
-func (transport *Transport) Publish(exchange, routingKey string, message any) error {
+func (t *Transport) Publish(exchange, routingKey string, message any) error {
 	data, err := json.Marshal(message)
 	if err != nil {
 		return errors.New("invalid message format")
@@ -52,37 +49,37 @@ func (transport *Transport) Publish(exchange, routingKey string, message any) er
 	msg := amqp.Publishing{
 		DeliveryMode: amqp.Persistent,
 		Timestamp:    time.Now(),
-		ContentType:  "application/json",
+		ContentType:  ApplicationJson,
 		Body:         data,
 	}
 
-	err = transport.channel.PublishWithContext(context.Background(), exchange,
+	err = t.channel.PublishWithContext(context.Background(), exchange,
 		routingKey, false, false, msg)
 
 	if err != nil {
-		log.Printf("error during publish %v", err)
+		log.Printf("publish error - %v", err)
 		return err
 	}
 
 	return nil
 }
 
-func (transport *Transport) Subscribe(queue string, handle func(jobSlug string, message []byte) error) error {
-	err := transport.CreateQueue(queue)
+func (t *Transport) Subscribe(queue string, handle func(message []byte) error) error {
+	err := t.CreateQueue(queue)
 	if err != nil {
 		return err
 	}
 
-	delivery, err := transport.channel.ConsumeWithContext(context.Background(), queue, "", false,
+	delivery, err := t.channel.ConsumeWithContext(context.Background(), queue, "", false,
 		false, false, false, amqp.Table{})
 	if err != nil {
-		log.Printf("error during consumer %v", err)
+		log.Printf("error during consumer - %v\n", err)
 		return err
 	}
 
 	for {
 		rawMessage := <-delivery
-		err = handle(rawMessage.RoutingKey, rawMessage.Body)
+		err = handle(rawMessage.Body)
 		if err != nil {
 			log.Printf("error during consumer processing - %v\n", err)
 
@@ -99,51 +96,50 @@ func (transport *Transport) Subscribe(queue string, handle func(jobSlug string, 
 	}
 }
 
-func (transport *Transport) CreateQueue(queue string) error {
+func (t *Transport) CreateQueue(queue string) error {
 	queue = strings.Trim(queue, " ")
 
-	if slices.Contains(transport.declaredQueues, queue) {
+	if slices.Contains(t.declaredQueues, queue) {
 		return nil
 	}
 
-	createdQueue, err := transport.channel.QueueDeclare(queue, true, false, false,
+	createdQueue, err := t.channel.QueueDeclare(queue, true, false, false,
 		false, amqp.Table{})
 
 	if err != nil {
-		log.Printf("error during creating queue %s - %s", string(ExchangeJobStatus), err)
+		log.Printf("creating queue error %s - %v\n", string(ExchangeJobStatus), err)
 		return err
 	}
 
-	transport.declaredQueues = append(transport.declaredQueues, createdQueue.Name)
+	t.declaredQueues = append(t.declaredQueues, createdQueue.Name)
 
 	return nil
 }
 
-func (transport *Transport) CreateExchange(exchange string) error {
+func (t *Transport) CreateExchange(exchange string) error {
 	exchange = strings.Trim(exchange, " ")
 
-	if slices.Contains(transport.declaredExchanges, exchange) {
+	if slices.Contains(t.declaredExchanges, exchange) {
 		return nil
 	}
 
-	err := transport.channel.ExchangeDeclare(exchange, "direct", true, false,
+	err := t.channel.ExchangeDeclare(exchange, "direct", true, false,
 		false, false, amqp.Table{})
 	if err != nil {
-		log.Printf("error during creating exchange %s - %s", string(ExchangeJobSchedule), err)
+		log.Printf("creating exchange error %s - %v\n", string(ExchangeJobSchedule), err)
 		return err
 	}
 
-	transport.declaredExchanges = append(transport.declaredExchanges, exchange)
+	t.declaredExchanges = append(t.declaredExchanges, exchange)
 
 	return nil
 }
 
-func (transport *Transport) BindQueue(queue, exchange, routingKey string) error {
-	err := transport.channel.QueueBind(queue, routingKey, exchange, false, amqp.Table{})
+func (t *Transport) BindQueue(queue, exchange, routingKey string) error {
+	err := t.channel.QueueBind(queue, routingKey, exchange, false, amqp.Table{})
 
 	if err != nil {
-		log.Printf("error during queue %s - exchange %s binding, routing key - %s, err - %s",
-			exchange, queue, routingKey, err)
+		log.Printf("exchange %s queue %s with routing key %s binding error - %v\n", exchange, queue, routingKey, err)
 		return err
 	}
 

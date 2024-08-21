@@ -16,9 +16,9 @@ type CreateScheduleCommand struct {
 }
 
 type RetryPolicyConfiguration struct {
-	Strategy scheduler.StrategyType `json:"strategy"` // strategy
-	Count    int                    `json:"count"`    // maximum count of retries
-	Interval string                 `json:"interval"` // base interval for strategy
+	Strategy scheduler.StrategyType `json:"strategy"`
+	Count    int                    `json:"count"`
+	Interval string                 `json:"interval"`
 }
 
 type JobConfiguration struct {
@@ -29,7 +29,9 @@ type CreateScheduleCommandResponse struct {
 	Id uuid.UUID `json:"id"`
 }
 
-var ErrJobScheduleConflict = scheduler.Error{Code: "JOB_SCHEDULE_CONFLICT", Message: "Job has assigned schedule already"}
+var ErrJobScheduleConflict = scheduler.Error{
+	Code:    "JOB_SCHEDULE_CONFLICT",
+	Message: "job has assigned schedule already"}
 
 func CreateSchedule(req *http.Request, str *scheduler.JobStorage,
 	tra *scheduler.Transport) (*CreateScheduleCommandResponse, error) {
