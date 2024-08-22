@@ -12,3 +12,6 @@ TODO:
 - [ ] scheduling engine (based on cron?)
 - [ ] HA support
 - [ ] client sdk, api
+- [ ] job run statistics
+- [ ] pausing schedules
+- [ ] support for single use schedules with delay (similar to ASB scheduled message)
