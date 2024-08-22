@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/google/uuid"
+	"github.com/robfig/cron/v3"
 	"net/http"
 	"timely/scheduler"
 )
@@ -89,7 +90,8 @@ func validate(req *http.Request) (*CreateScheduleCommand, error) {
 		return nil, errors.New("missing frequency configuration")
 	}
 
-	if comm.Frequency != "once" {
+	specParser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+	if _, err := specParser.Parse(comm.Frequency); err != nil {
 		return nil, errors.New("invalid frequency configuration")
 	}
 
