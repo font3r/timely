@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"github.com/google/uuid"
+	"github.com/robfig/cron/v3"
 	"log"
 	"time"
 )
@@ -32,7 +33,7 @@ type ScheduleJobEvent struct {
 	JobName string `json:"jobName"`
 }
 
-func NewSchedule(description, frequency, slug string, policy RetryPolicy) Schedule {
+func NewSchedule(description, frequency, slug string, policy RetryPolicy, nextExecutionDate time.Time) Schedule {
 	return Schedule{
 		Id:                uuid.New(),
 		Description:       description,
@@ -41,7 +42,7 @@ func NewSchedule(description, frequency, slug string, policy RetryPolicy) Schedu
 		Attempt:           0,
 		RetryPolicy:       policy,
 		LastExecutionDate: nil,
-		NextExecutionDate: nil,
+		NextExecutionDate: &nextExecutionDate,
 		Job: &Job{
 			Id:   uuid.New(),
 			Slug: slug,
@@ -106,6 +107,16 @@ func (s *Schedule) Failed() error {
 }
 
 func (s *Schedule) Finished() {
-	s.Status = Finished
+	s.Status = Finished // is job really finished if it's cyclic?
+
+	specParser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+	sch, _ := specParser.Parse(s.Frequency)
+
+	nextExec := sch.Next(time.Now())
+	if nextExec != (time.Time{}) {
+		s.NextExecutionDate = &nextExec
+		return
+	}
+
 	s.NextExecutionDate = nil
 }

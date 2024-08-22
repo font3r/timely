@@ -6,6 +6,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
 	"net/http"
+	"time"
 	"timely/scheduler"
 )
 
@@ -53,7 +54,14 @@ func CreateSchedule(req *http.Request, str *scheduler.JobStorage,
 		retryPolicy = scheduler.RetryPolicy{}
 	}
 
-	schedule := scheduler.NewSchedule(comm.Description, comm.Frequency, comm.Job.Slug, retryPolicy)
+	specParser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+	sch, err := specParser.Parse(comm.Frequency)
+	if err != nil {
+		return nil, errors.New("invalid frequency configuration")
+	}
+
+	schedule := scheduler.NewSchedule(comm.Description, comm.Frequency, comm.Job.Slug,
+		retryPolicy, sch.Next(time.Now()))
 
 	if err = str.Add(schedule); err != nil {
 		if errors.Is(err, scheduler.ErrUniqueConstraintViolation) {
@@ -88,11 +96,6 @@ func validate(req *http.Request) (*CreateScheduleCommand, error) {
 
 	if comm.Frequency == "" {
 		return nil, errors.New("missing frequency configuration")
-	}
-
-	specParser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
-	if _, err := specParser.Parse(comm.Frequency); err != nil {
-		return nil, errors.New("invalid frequency configuration")
 	}
 
 	if comm.Job == (JobConfiguration{}) {
