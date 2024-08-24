@@ -17,6 +17,7 @@ Content-Type: application/json
 {
     "description": "test job description",
     "frequency": "*/1 * * * *",
+    "schedule_start": "",
     "job": {
         "slug": "test-example-job-1"
     },

@@ -15,7 +15,7 @@ type Scheduler struct {
 }
 
 type JobStatusEvent struct {
-	JobSlug string `json:"jobSlug"`
+	JobSlug string `json:"job_slug"`
 	Status  string `json:"status"`
 	Reason  string `json:"reason"`
 	Seq     int16  `json:"seq"`

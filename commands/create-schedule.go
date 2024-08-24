@@ -3,18 +3,20 @@ package commands
 import (
 	"encoding/json"
 	"errors"
-	"github.com/google/uuid"
-	"github.com/robfig/cron/v3"
 	"net/http"
 	"time"
 	"timely/scheduler"
+
+	"github.com/google/uuid"
+	"github.com/robfig/cron/v3"
 )
 
 type CreateScheduleCommand struct {
-	Description string                   `json:"description"`
-	Frequency   string                   `json:"frequency"`
-	Job         JobConfiguration         `json:"job"`
-	RetryPolicy RetryPolicyConfiguration `json:"retry_policy"`
+	Description   string                   `json:"description"`
+	Frequency     string                   `json:"frequency"` // TODO: how to define single time job
+	Job           JobConfiguration         `json:"job"`
+	RetryPolicy   RetryPolicyConfiguration `json:"retry_policy"`
+	ScheduleStart *time.Time               `json:"schedule_start"`
 }
 
 type RetryPolicyConfiguration struct {
@@ -27,7 +29,7 @@ type JobConfiguration struct {
 	Slug string `json:"slug"`
 }
 
-type CreateScheduleCommandResponse struct {
+type CreateScheduleResponse struct {
 	Id uuid.UUID `json:"id"`
 }
 
@@ -35,52 +37,48 @@ var ErrJobScheduleConflict = scheduler.Error{
 	Code:    "JOB_SCHEDULE_CONFLICT",
 	Message: "job has assigned schedule already"}
 
-func CreateSchedule(req *http.Request, str *scheduler.JobStorage,
-	tra *scheduler.Transport) (*CreateScheduleCommandResponse, error) {
+type CreateScheduleHandler struct {
+	Storage   *scheduler.JobStorage
+	Transport *scheduler.Transport
+}
 
+func (h CreateScheduleHandler) CreateSchedule(req *http.Request) (*CreateScheduleResponse, error) {
 	comm, err := validate(req)
 	if err != nil {
 		return nil, err
 	}
 
-	var retryPolicy scheduler.RetryPolicy
-	if comm.RetryPolicy != (RetryPolicyConfiguration{}) {
-		retryPolicy, err = scheduler.NewRetryPolicy(comm.RetryPolicy.Strategy, comm.RetryPolicy.Count,
-			comm.RetryPolicy.Interval)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		retryPolicy = scheduler.RetryPolicy{}
+	retryPolicy, err := getRetryPolicy(comm.RetryPolicy)
+	if err != nil {
+		return nil, err
 	}
 
-	specParser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
-	sch, err := specParser.Parse(comm.Frequency)
+	firstExecution, err := calculateFirstExecution(comm.Frequency, comm.ScheduleStart)
 	if err != nil {
-		return nil, errors.New("invalid frequency configuration")
+		return nil, err
 	}
 
 	schedule := scheduler.NewSchedule(comm.Description, comm.Frequency, comm.Job.Slug,
-		retryPolicy, sch.Next(time.Now()))
+		retryPolicy, firstExecution)
 
-	if err = str.Add(schedule); err != nil {
+	if err = h.Storage.Add(schedule); err != nil {
 		if errors.Is(err, scheduler.ErrUniqueConstraintViolation) {
 			return nil, ErrJobScheduleConflict
 		}
 		return nil, err
 	}
 
-	if err = tra.CreateQueue(schedule.Job.Slug); err != nil {
+	if err = h.Transport.CreateQueue(schedule.Job.Slug); err != nil {
 		// TODO: at this point we should delete job from db
 		return nil, err
 	}
 
-	if err = tra.BindQueue(schedule.Job.Slug, string(scheduler.ExchangeJobSchedule),
+	if err = h.Transport.BindQueue(schedule.Job.Slug, string(scheduler.ExchangeJobSchedule),
 		schedule.Job.Slug); err != nil {
 		return nil, err
 	}
 
-	return &CreateScheduleCommandResponse{Id: schedule.Id}, nil
+	return &CreateScheduleResponse{Id: schedule.Id}, nil
 }
 
 func validate(req *http.Request) (*CreateScheduleCommand, error) {
@@ -90,21 +88,59 @@ func validate(req *http.Request) (*CreateScheduleCommand, error) {
 		return nil, err
 	}
 
+	var err error
+
 	if comm.Description == "" {
-		return nil, errors.New("invalid description")
+		err = errors.Join(errors.New("invalid description"))
 	}
 
 	if comm.Frequency == "" {
-		return nil, errors.New("missing frequency configuration")
+		err = errors.Join(errors.New("missing frequency configuration"))
+	}
+
+	if comm.ScheduleStart != nil && time.Now().After(*comm.ScheduleStart) {
+		err = errors.Join(errors.New("invalid schedule start"))
 	}
 
 	if comm.Job == (JobConfiguration{}) {
-		return nil, errors.New("missing job configuration")
+		err = errors.Join(errors.New("missing job configuration"))
 	}
 
 	if comm.Job.Slug == "" {
-		return nil, errors.New("invalid job slug")
+		err = errors.Join(errors.New("invalid job slug"))
+	}
+
+	if err != nil {
+		return nil, err
 	}
 
 	return comm, nil
+}
+
+func getRetryPolicy(retryPolicyConf RetryPolicyConfiguration) (scheduler.RetryPolicy, error) {
+	if retryPolicyConf == (RetryPolicyConfiguration{}) {
+		return scheduler.RetryPolicy{}, nil
+	}
+
+	retryPolicy, err := scheduler.NewRetryPolicy(retryPolicyConf.Strategy, retryPolicyConf.Count,
+		retryPolicyConf.Interval)
+	if err != nil {
+		return scheduler.RetryPolicy{}, err
+	}
+
+	return retryPolicy, nil
+}
+
+func calculateFirstExecution(frequency string, scheduleStart *time.Time) (time.Time, error) {
+	specParser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+	sch, err := specParser.Parse(frequency)
+	if err != nil {
+		return time.Time{}, errors.New("invalid frequency configuration")
+	}
+
+	if scheduleStart != nil {
+		return *scheduleStart, nil
+	}
+
+	return sch.Next(time.Now()), nil
 }

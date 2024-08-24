@@ -3,11 +3,12 @@ package scheduler
 import (
 	"context"
 	"errors"
+	"time"
+
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"time"
 )
 
 const (
@@ -33,7 +34,7 @@ func NewJobStorage(connectionString string) (*JobStorage, error) {
 	return &JobStorage{pool: dbPool}, nil
 }
 
-func (js *JobStorage) GetScheduleById(id uuid.UUID) (*Schedule, error) {
+func (js JobStorage) GetScheduleById(id uuid.UUID) (*Schedule, error) {
 	var schedule = Schedule{
 		RetryPolicy: RetryPolicy{},
 		Job:         &Job{},
@@ -61,7 +62,7 @@ func (js *JobStorage) GetScheduleById(id uuid.UUID) (*Schedule, error) {
 	return &schedule, nil
 }
 
-func (js *JobStorage) GetScheduleByJobSlug(slug string) (*Schedule, error) {
+func (js JobStorage) GetScheduleByJobSlug(slug string) (*Schedule, error) {
 	var schedule = Schedule{
 		RetryPolicy: RetryPolicy{},
 		Job:         &Job{},
@@ -89,7 +90,7 @@ func (js *JobStorage) GetScheduleByJobSlug(slug string) (*Schedule, error) {
 	return &schedule, nil
 }
 
-func (js *JobStorage) GetSchedulesWithStatus(status ScheduleStatus) ([]*Schedule, error) {
+func (js JobStorage) GetSchedulesWithStatus(status ScheduleStatus) ([]*Schedule, error) {
 	sql := `SELECT js.id, js.description, js.status, js.attempt, js.frequency, js.retry_policy_strategy, js.retry_policy_count, 
 				js.retry_policy_interval, js.last_execution_date, js.next_execution_date, j.id, j.slug
 			FROM jobs AS j 
@@ -122,7 +123,7 @@ func (js *JobStorage) GetSchedulesWithStatus(status ScheduleStatus) ([]*Schedule
 	return schedules, nil
 }
 
-func (js *JobStorage) GetSchedulesReadyToReschedule() ([]*Schedule, error) {
+func (js JobStorage) GetSchedulesReadyToReschedule() ([]*Schedule, error) {
 	sql := `SELECT js.id, js.description, js.status, js.attempt, js.frequency, js.retry_policy_strategy, js.retry_policy_count, 
 				js.retry_policy_interval, js.last_execution_date, js.next_execution_date, j.id, j.slug
 			FROM jobs AS j 
@@ -155,7 +156,7 @@ func (js *JobStorage) GetSchedulesReadyToReschedule() ([]*Schedule, error) {
 	return schedules, nil
 }
 
-func (js *JobStorage) GetAll() ([]*Schedule, error) {
+func (js JobStorage) GetAll() ([]*Schedule, error) {
 	sql := `SELECT js.id, js.description, js.status, js.attempt, js.frequency, js.retry_policy_strategy, js.retry_policy_count, 
 				js.retry_policy_interval, js.last_execution_date, js.next_execution_date, j.id, j.slug
 			FROM jobs AS j 
@@ -187,7 +188,7 @@ func (js *JobStorage) GetAll() ([]*Schedule, error) {
 	return schedules, nil
 }
 
-func (js *JobStorage) Add(schedule Schedule) error {
+func (js JobStorage) Add(schedule Schedule) error {
 	tx, err := js.pool.Begin(context.Background())
 	if err != nil {
 		return err
@@ -233,7 +234,7 @@ func (js *JobStorage) Add(schedule Schedule) error {
 	return nil
 }
 
-func (js *JobStorage) DeleteScheduleById(id uuid.UUID) error {
+func (js JobStorage) DeleteScheduleById(id uuid.UUID) error {
 	tx, err := js.pool.Begin(context.Background())
 	if err != nil {
 		return err
@@ -264,7 +265,7 @@ func (js *JobStorage) DeleteScheduleById(id uuid.UUID) error {
 	return nil
 }
 
-func (js *JobStorage) UpdateSchedule(schedule *Schedule) error {
+func (js JobStorage) UpdateSchedule(schedule *Schedule) error {
 	sql := `UPDATE job_schedule SET last_execution_date = $1, next_execution_date = $2, attempt = $3, status = $4 WHERE id = $5`
 
 	_, err := js.pool.Exec(context.Background(), sql,

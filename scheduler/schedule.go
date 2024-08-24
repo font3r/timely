@@ -1,10 +1,11 @@
 package scheduler
 
 import (
-	"github.com/google/uuid"
-	"github.com/robfig/cron/v3"
 	"log"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/robfig/cron/v3"
 )
 
 type ScheduleStatus string
@@ -72,7 +73,6 @@ func (s *Schedule) Start(t *Transport, result chan<- error) {
 
 	log.Printf("scheduled job %s/%s", s.Job.Id, s.Job.Slug)
 	result <- nil
-	return
 }
 
 func (s *Schedule) Failed() error {

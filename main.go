@@ -4,13 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/spf13/viper"
 	"log"
 	"net/http"
 	testjobhandler "timely/cmd"
 	"timely/commands"
 	"timely/queries"
 	"timely/scheduler"
+
+	"github.com/spf13/viper"
 
 	"github.com/gorilla/mux"
 )
@@ -95,7 +96,12 @@ func registerRoutes(router *mux.Router, app *Application) {
 	}).Methods("DELETE")
 
 	v1.HandleFunc("/schedules", func(w http.ResponseWriter, req *http.Request) {
-		result, err := commands.CreateSchedule(req, app.Scheduler.Storage, app.Scheduler.Transport)
+		handler := commands.CreateScheduleHandler{
+			Storage:   app.Scheduler.Storage,
+			Transport: app.Scheduler.Transport,
+		}
+
+		result, err := handler.CreateSchedule(req)
 		if err != nil {
 			problem(w, err)
 			return

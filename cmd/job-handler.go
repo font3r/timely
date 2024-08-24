@@ -3,15 +3,16 @@ package test_job_handler
 import (
 	"errors"
 	"fmt"
-	"github.com/spf13/viper"
 	"log"
 	"math/rand"
 	"time"
 	"timely/scheduler"
+
+	"github.com/spf13/viper"
 )
 
 type JobStatusEvent struct {
-	JobSlug string `json:"jobSlug"`
+	JobSlug string `json:"job_slug"`
 	Status  string `json:"status"`
 	Reason  string `json:"reason"`
 	Seq     int16  `json:"seq"`
