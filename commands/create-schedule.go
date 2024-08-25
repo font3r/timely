@@ -8,12 +8,11 @@ import (
 	"timely/scheduler"
 
 	"github.com/google/uuid"
-	"github.com/robfig/cron/v3"
 )
 
 type CreateScheduleCommand struct {
 	Description   string                   `json:"description"`
-	Frequency     string                   `json:"frequency"` // TODO: how to define single time job
+	Frequency     string                   `json:"frequency"`
 	Job           JobConfiguration         `json:"job"`
 	RetryPolicy   RetryPolicyConfiguration `json:"retry_policy"`
 	ScheduleStart *time.Time               `json:"schedule_start"`
@@ -53,13 +52,7 @@ func (h CreateScheduleHandler) CreateSchedule(req *http.Request) (*CreateSchedul
 		return nil, err
 	}
 
-	firstExecution, err := calculateFirstExecution(comm.Frequency, comm.ScheduleStart)
-	if err != nil {
-		return nil, err
-	}
-
-	schedule := scheduler.NewSchedule(comm.Description, comm.Frequency, comm.Job.Slug,
-		retryPolicy, firstExecution)
+	schedule := scheduler.NewSchedule(comm.Description, comm.Frequency, comm.Job.Slug, retryPolicy, comm.ScheduleStart)
 
 	if err = h.Storage.Add(schedule); err != nil {
 		if errors.Is(err, scheduler.ErrUniqueConstraintViolation) {
@@ -98,6 +91,13 @@ func validate(req *http.Request) (*CreateScheduleCommand, error) {
 		err = errors.Join(errors.New("missing frequency configuration"))
 	}
 
+	if comm.Frequency != string(scheduler.Once) {
+		_, err = scheduler.CronParser.Parse(comm.Frequency)
+		if err != nil {
+			err = errors.Join(errors.New("invalid frequency configuration"))
+		}
+	}
+
 	if comm.ScheduleStart != nil && time.Now().After(*comm.ScheduleStart) {
 		err = errors.Join(errors.New("invalid schedule start"))
 	}
@@ -129,18 +129,4 @@ func getRetryPolicy(retryPolicyConf RetryPolicyConfiguration) (scheduler.RetryPo
 	}
 
 	return retryPolicy, nil
-}
-
-func calculateFirstExecution(frequency string, scheduleStart *time.Time) (time.Time, error) {
-	specParser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
-	sch, err := specParser.Parse(frequency)
-	if err != nil {
-		return time.Time{}, errors.New("invalid frequency configuration")
-	}
-
-	if scheduleStart != nil {
-		return *scheduleStart, nil
-	}
-
-	return sch.Next(time.Now()), nil
 }

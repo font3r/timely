@@ -1,10 +1,14 @@
 package scheduler
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/robfig/cron/v3"
+)
 
 type ExchangeName string
 type QueueName string
 type RoutingKey string
+type PredefinedFrequency string
 
 const (
 	ExchangeJobSchedule ExchangeName = "timely-schedule-job"
@@ -12,6 +16,10 @@ const (
 	QueueJobStatus      QueueName    = "timely-job-status"
 	RoutingKeyJobStatus RoutingKey   = "timely-job-status"
 )
+
+const Once PredefinedFrequency = "once"
+
+var CronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 
 const (
 	ContentTypeHeader        = "Content-Type"

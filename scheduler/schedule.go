@@ -1,11 +1,11 @@
 package scheduler
 
 import (
+	"github.com/robfig/cron/v3"
 	"log"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/robfig/cron/v3"
 )
 
 type ScheduleStatus string
@@ -34,7 +34,9 @@ type ScheduleJobEvent struct {
 	JobName string `json:"jobName"`
 }
 
-func NewSchedule(description, frequency, slug string, policy RetryPolicy, nextExecutionDate time.Time) Schedule {
+func NewSchedule(description, frequency, slug string, policy RetryPolicy, scheduleStart *time.Time) Schedule {
+	execution := getFirstExecution(frequency, scheduleStart)
+
 	return Schedule{
 		Id:                uuid.New(),
 		Description:       description,
@@ -43,12 +45,27 @@ func NewSchedule(description, frequency, slug string, policy RetryPolicy, nextEx
 		Attempt:           0,
 		RetryPolicy:       policy,
 		LastExecutionDate: nil,
-		NextExecutionDate: &nextExecutionDate,
+		NextExecutionDate: &execution,
 		Job: &Job{
 			Id:   uuid.New(),
 			Slug: slug,
 		},
 	}
+}
+
+func getFirstExecution(frequency string, scheduleStart *time.Time) time.Time {
+	if scheduleStart != nil {
+		return *scheduleStart
+	}
+
+	if frequency == string(Once) {
+		return time.Now().Round(time.Second)
+	}
+
+	specParser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+	sch, _ := specParser.Parse(frequency)
+
+	return sch.Next(time.Now().Round(time.Second))
 }
 
 func (s *Schedule) Start(t *Transport, result chan<- error) {
@@ -100,7 +117,7 @@ func (s *Schedule) Failed() error {
 
 	if next == (time.Time{}) {
 		s.NextExecutionDate = nil
-		log.Printf("schedule failed after retrying%v\n", next)
+		log.Println("schedule failed after retrying")
 	} else {
 		s.NextExecutionDate = &next
 		log.Printf("schedule retrying at %v\n", next)
@@ -112,10 +129,14 @@ func (s *Schedule) Failed() error {
 func (s *Schedule) Finished() {
 	s.Status = Finished // is job really finished if it's cyclic?
 
-	specParser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
-	sch, _ := specParser.Parse(s.Frequency)
+	if s.Frequency == string(Once) {
+		s.NextExecutionDate = nil
+		return
+	}
 
-	nextExec := sch.Next(time.Now())
+	sch, _ := CronParser.Parse(s.Frequency)
+
+	nextExec := sch.Next(time.Now().Round(time.Second))
 	if nextExec != (time.Time{}) {
 		s.NextExecutionDate = &nextExec
 		return

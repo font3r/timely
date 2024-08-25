@@ -128,7 +128,7 @@ func (js JobStorage) GetSchedulesReadyToReschedule() ([]*Schedule, error) {
 				js.retry_policy_interval, js.last_execution_date, js.next_execution_date, j.id, j.slug
 			FROM jobs AS j 
 			JOIN job_schedule AS js ON js.id = j.schedule_id
-			WHERE status = $1 OR status = $2 AND next_execution_date <= $3`
+			WHERE (status = $1 OR status = $2) AND next_execution_date <= $3`
 
 	rows, err := js.pool.Query(context.Background(), sql, Failed, Finished, time.Now())
 
