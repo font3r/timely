@@ -62,5 +62,5 @@ func (rp RetryPolicy) GetNextExecutionTime(executionDate time.Time, attempt int)
 		}
 	}
 
-	return time.Now(), nil
+	return time.Now().Round(time.Second), nil
 }

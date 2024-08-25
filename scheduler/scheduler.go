@@ -150,7 +150,7 @@ func handleJobEvent(message []byte, storage *JobStorage) error {
 	}
 
 	if schedule.LastExecutionDate == nil {
-		now := time.Now()
+		now := time.Now().Round(time.Second)
 		schedule.LastExecutionDate = &now
 	}
 

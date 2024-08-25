@@ -71,6 +71,9 @@ func (s *Schedule) Start(t *Transport, result chan<- error) {
 	s.Attempt++
 	s.Status = Scheduled
 
+	now := time.Now().Round(time.Second)
+	s.LastExecutionDate = &now
+
 	log.Printf("scheduled job %s/%s", s.Job.Id, s.Job.Slug)
 	result <- nil
 }
