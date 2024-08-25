@@ -1,6 +1,7 @@
 package test_job_handler
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -18,6 +19,11 @@ type JobStatusEvent struct {
 	Seq     int16  `json:"seq"`
 }
 
+type ScheduleJobEvent struct {
+	Job  string          `json:"job"`
+	Data *map[string]any `json:"data"`
+}
+
 func Start() {
 	log.Println("test-app: starting ...")
 
@@ -31,6 +37,14 @@ func Start() {
 		go func(jobSlug string) {
 			err = tra.Subscribe(jobSlug, func(message []byte) error {
 				log.Printf("test-app: requested job start with slug %s", jobSlug)
+
+				var event ScheduleJobEvent
+				err = json.Unmarshal(message, &event)
+				if err != nil {
+					return err
+				}
+
+				log.Printf("test-app: job slug %s data %+v", jobSlug, event.Data)
 
 				err = processMockJob(tra, jobSlug)
 				if err != nil {
@@ -52,7 +66,7 @@ func processMockJob(tra *scheduler.Transport, jobSlug string) error {
 	var seq int16 = 0
 
 	for i := 0; i < 10; i++ {
-		if rand.Intn(10) <= -1 { // random failure rate for testing
+		if rand.Intn(10) <= 100 { // random failure rate for testing
 			err := tra.Publish(string(scheduler.ExchangeJobStatus),
 				string(scheduler.RoutingKeyJobStatus), JobStatusEvent{
 					JobSlug: jobSlug,

@@ -25,7 +25,8 @@ type RetryPolicyConfiguration struct {
 }
 
 type JobConfiguration struct {
-	Slug string `json:"slug"`
+	Slug string          `json:"slug"`
+	Data *map[string]any `json:"data"`
 }
 
 type CreateScheduleResponse struct {
@@ -52,7 +53,8 @@ func (h CreateScheduleHandler) CreateSchedule(req *http.Request) (*CreateSchedul
 		return nil, err
 	}
 
-	schedule := scheduler.NewSchedule(comm.Description, comm.Frequency, comm.Job.Slug, retryPolicy, comm.ScheduleStart)
+	schedule := scheduler.NewSchedule(comm.Description, comm.Frequency, comm.Job.Slug,
+		comm.Job.Data, retryPolicy, comm.ScheduleStart)
 
 	if err = h.Storage.Add(schedule); err != nil {
 		if errors.Is(err, scheduler.ErrUniqueConstraintViolation) {

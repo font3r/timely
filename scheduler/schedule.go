@@ -1,11 +1,10 @@
 package scheduler
 
 import (
+	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
 	"log"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 type ScheduleStatus string
@@ -31,10 +30,13 @@ type Schedule struct {
 }
 
 type ScheduleJobEvent struct {
-	JobName string `json:"jobName"`
+	Job  string          `json:"job"`
+	Data *map[string]any `json:"data"`
 }
 
-func NewSchedule(description, frequency, slug string, policy RetryPolicy, scheduleStart *time.Time) Schedule {
+func NewSchedule(description, frequency, slug string, data *map[string]any,
+	policy RetryPolicy, scheduleStart *time.Time) Schedule {
+
 	execution := getFirstExecution(frequency, scheduleStart)
 
 	return Schedule{
@@ -49,6 +51,7 @@ func NewSchedule(description, frequency, slug string, policy RetryPolicy, schedu
 		Job: &Job{
 			Id:   uuid.New(),
 			Slug: slug,
+			Data: data,
 		},
 	}
 }
@@ -76,7 +79,10 @@ func (s *Schedule) Start(t *Transport, result chan<- error) {
 	}
 
 	err = t.Publish(string(ExchangeJobSchedule), s.Job.Slug,
-		ScheduleJobEvent{JobName: s.Job.Slug})
+		ScheduleJobEvent{
+			Job:  s.Job.Slug,
+			Data: s.Job.Data,
+		})
 
 	if err != nil {
 		log.Printf("failed to start job %v", err)
@@ -99,6 +105,7 @@ func (s *Schedule) Failed() error {
 	s.Status = Failed
 
 	if s.RetryPolicy == (RetryPolicy{}) {
+		s.NextExecutionDate = nil
 		return nil
 	}
 
@@ -135,7 +142,6 @@ func (s *Schedule) Finished() {
 	}
 
 	sch, _ := CronParser.Parse(s.Frequency)
-
 	nextExec := sch.Next(time.Now().Round(time.Second))
 	if nextExec != (time.Time{}) {
 		s.NextExecutionDate = &nextExec

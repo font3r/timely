@@ -9,6 +9,7 @@ import (
 type Job struct {
 	Id   uuid.UUID
 	Slug string
+	Data *map[string]any
 }
 
 type JobRun struct {
