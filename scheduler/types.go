@@ -27,10 +27,10 @@ const (
 )
 
 type Error struct {
-	Code    string
-	Message string
+	Code string
+	Msg  string
 }
 
 func (e Error) Error() string {
-	return fmt.Sprintf("%s - %s", e.Code, e.Message)
+	return fmt.Sprintf("%s - %s", e.Code, e.Msg)
 }

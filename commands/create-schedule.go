@@ -34,8 +34,8 @@ type CreateScheduleResponse struct {
 }
 
 var ErrJobScheduleConflict = scheduler.Error{
-	Code:    "JOB_SCHEDULE_CONFLICT",
-	Message: "job has assigned schedule already"}
+	Code: "JOB_SCHEDULE_CONFLICT",
+	Msg:  "job has assigned schedule already"}
 
 type CreateScheduleHandler struct {
 	Storage   *scheduler.JobStorage

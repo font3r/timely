@@ -3,8 +3,8 @@ package scheduler
 import (
 	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
-	"log"
 	"time"
+	log "timely/logger"
 )
 
 type ScheduleStatus string
@@ -85,7 +85,7 @@ func (s *Schedule) Start(t *Transport, result chan<- error) {
 		})
 
 	if err != nil {
-		log.Printf("failed to start job %v", err)
+		log.Logger.Printf("failed to start job %v", err)
 
 		result <- err
 		return
@@ -97,7 +97,7 @@ func (s *Schedule) Start(t *Transport, result chan<- error) {
 	now := time.Now().Round(time.Second)
 	s.LastExecutionDate = &now
 
-	log.Printf("scheduled job %s/%s", s.Job.Id, s.Job.Slug)
+	log.Logger.Printf("scheduled job %s/%s", s.Job.Id, s.Job.Slug)
 	result <- nil
 }
 
@@ -124,10 +124,10 @@ func (s *Schedule) Failed() error {
 
 	if next == (time.Time{}) {
 		s.NextExecutionDate = nil
-		log.Println("schedule failed after retrying")
+		log.Logger.Println("schedule failed after retrying")
 	} else {
 		s.NextExecutionDate = &next
-		log.Printf("schedule retrying at %v\n", next)
+		log.Logger.Printf("schedule retrying at %v\n", next)
 	}
 
 	return nil

@@ -18,8 +18,8 @@ const (
 
 var (
 	ErrUniqueConstraintViolation = &Error{
-		Code:    "UNIQUE_CONSTRAINT_VIOLATION",
-		Message: "unique constraint violation"}
+		Code: "UNIQUE_CONSTRAINT_VIOLATION",
+		Msg:  "unique constraint violation"}
 )
 
 type JobStorage struct {
