@@ -2,8 +2,8 @@ package scheduler
 
 import (
 	"encoding/json"
-	"log"
 	"time"
+	log "timely/logger"
 
 	"github.com/google/uuid"
 )
@@ -18,19 +18,18 @@ type JobStatusEvent struct {
 	JobSlug string `json:"job_slug"`
 	Status  string `json:"status"`
 	Reason  string `json:"reason"`
-	Seq     int16  `json:"seq"`
 }
 
 var (
 	ErrReceivedStatusForUnknownSchedule = &Error{
-		Code:    "UNKNOWN_SCHEDULE",
-		Message: "received status for unknown schedule"}
+		Code: "UNKNOWN_SCHEDULE",
+		Msg:  "received status for unknown schedule"}
 	ErrFetchNewSchedules = &Error{
-		Code:    "FETCH_NEW_SCHEDULES_ERROR",
-		Message: "fetch new schedules failed"}
+		Code: "FETCH_NEW_SCHEDULES_ERROR",
+		Msg:  "fetch new schedules failed"}
 	ErrFetchFailedSchedules = &Error{
-		Code:    "FETCH_FAILED_SCHEDULES_ERROR",
-		Message: "fetch failed schedules failed"}
+		Code: "FETCH_FAILED_SCHEDULES_ERROR",
+		Msg:  "fetch failed schedules failed"}
 )
 
 func Start(str *JobStorage, tra *Transport) *Scheduler {
@@ -41,11 +40,11 @@ func Start(str *JobStorage, tra *Transport) *Scheduler {
 		Transport: tra,
 	}
 
-	log.Printf("starting scheduler with id %s\n", schedulerId)
+	log.Logger.Printf("starting scheduler with id %s\n", schedulerId)
 
 	err := createTransportDependencies(tra)
 	if err != nil {
-		log.Printf("creating internal exchanges/queues error - %v", err)
+		log.Logger.Printf("creating internal exchanges/queues error - %v", err)
 		return nil
 	}
 
@@ -57,7 +56,7 @@ func Start(str *JobStorage, tra *Transport) *Scheduler {
 
 			err = <-tickResult
 			if err != nil {
-				log.Printf("processing scheduler tick error - %v", err)
+				log.Logger.Printf("processing scheduler tick error - %v", err)
 			}
 
 			time.Sleep(time.Second)
@@ -113,7 +112,7 @@ func processTick(str *JobStorage, tr *Transport, tickResult chan<- error) {
 
 		err = str.UpdateSchedule(schedule)
 		if err != nil {
-			log.Printf("error updating schedule status - %v\n", err)
+			log.Logger.Printf("error updating schedule status - %v\n", err)
 			tickResult <- err
 			return
 		}
@@ -128,7 +127,7 @@ func processJobEvents(tra *Transport, storage *JobStorage) {
 	})
 
 	if err != nil {
-		log.Printf("error during processing job events - %v\n", err)
+		log.Logger.Printf("error during processing job events - %v\n", err)
 		return
 	}
 }
@@ -154,7 +153,7 @@ func handleJobEvent(message []byte, storage *JobStorage) error {
 		schedule.LastExecutionDate = &now
 	}
 
-	log.Printf("received job status %v\n", jobStatus)
+	log.Logger.Printf("received job status %+v\n", jobStatus)
 	switch jobStatus.Status {
 	case string(Processing):
 		schedule.Status = Processing
@@ -177,13 +176,13 @@ func handleJobEvent(message []byte, storage *JobStorage) error {
 func getSchedulesReadyToStart(str *JobStorage) ([]*Schedule, error) {
 	readySchedules, err := str.GetSchedulesWithStatus(New)
 	if err != nil {
-		log.Printf("fetch new schedules error - %v\n", err)
+		log.Logger.Printf("fetch new schedules error - %v\n", err)
 		return nil, ErrFetchNewSchedules
 	}
 
 	rescheduleReady, err := str.GetSchedulesReadyToReschedule()
 	if err != nil {
-		log.Printf("fetch failed schedules error - %v\n", err)
+		log.Logger.Printf("fetch failed schedules error - %v\n", err)
 		return nil, ErrFetchFailedSchedules
 	}
 

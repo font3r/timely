@@ -29,8 +29,9 @@ type RetryPolicyDto struct {
 }
 
 type JobDto struct {
-	Id   uuid.UUID `json:"id"`
-	Slug string    `json:"slug"`
+	Id   uuid.UUID       `json:"id"`
+	Slug string          `json:"slug"`
+	Data *map[string]any `json:"data"`
 }
 
 func GetSchedule(req *http.Request, str *scheduler.JobStorage) (ScheduleDto, error) {
@@ -70,6 +71,7 @@ func GetSchedule(req *http.Request, str *scheduler.JobStorage) (ScheduleDto, err
 		Job: JobDto{
 			Id:   schedule.Job.Id,
 			Slug: schedule.Job.Slug,
+			Data: schedule.Job.Data,
 		},
 	}, nil
 }

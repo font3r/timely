@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -17,8 +18,8 @@ const (
 
 var (
 	ErrUniqueConstraintViolation = &Error{
-		Code:    "UNIQUE_CONSTRAINT_VIOLATION",
-		Message: "unique constraint violation"}
+		Code: "UNIQUE_CONSTRAINT_VIOLATION",
+		Msg:  "unique constraint violation"}
 )
 
 type JobStorage struct {
@@ -41,21 +42,28 @@ func (js JobStorage) GetScheduleById(id uuid.UUID) (*Schedule, error) {
 	}
 
 	sql := `SELECT js.id, js.description, js.status, js.attempt, js.frequency, js.retry_policy_strategy, js.retry_policy_count, 
-				js.retry_policy_interval, js.last_execution_date, js.next_execution_date, j.id, j.slug
+				js.retry_policy_interval, js.last_execution_date, js.next_execution_date, j.id, j.slug, j.data
 			FROM jobs AS j 
 			JOIN job_schedule AS js ON js.id = j.schedule_id
 			WHERE js.id = $1`
 
+	var jobData string
+
 	err := js.pool.QueryRow(context.Background(), sql, id).
 		Scan(&schedule.Id, &schedule.Description, &schedule.Status, &schedule.Attempt, &schedule.Frequency, &schedule.RetryPolicy.Strategy,
 			&schedule.RetryPolicy.Count, &schedule.RetryPolicy.Interval, &schedule.LastExecutionDate,
-			&schedule.NextExecutionDate, &schedule.Job.Id, &schedule.Job.Slug)
+			&schedule.NextExecutionDate, &schedule.Job.Id, &schedule.Job.Slug, &jobData)
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
 
+		return nil, err
+	}
+
+	err = json.Unmarshal([]byte(jobData), &schedule.Job.Data)
+	if err != nil {
 		return nil, err
 	}
 
@@ -92,7 +100,7 @@ func (js JobStorage) GetScheduleByJobSlug(slug string) (*Schedule, error) {
 
 func (js JobStorage) GetSchedulesWithStatus(status ScheduleStatus) ([]*Schedule, error) {
 	sql := `SELECT js.id, js.description, js.status, js.attempt, js.frequency, js.retry_policy_strategy, js.retry_policy_count, 
-				js.retry_policy_interval, js.last_execution_date, js.next_execution_date, j.id, j.slug
+				js.retry_policy_interval, js.last_execution_date, js.next_execution_date, j.id, j.slug, j.data
 			FROM jobs AS j 
 			JOIN job_schedule AS js ON js.id = j.schedule_id
 			WHERE status = $1 AND next_execution_date <= $2`
@@ -103,6 +111,7 @@ func (js JobStorage) GetSchedulesWithStatus(status ScheduleStatus) ([]*Schedule,
 		return nil, err
 	}
 
+	var jobData string
 	schedules := make([]*Schedule, 0)
 	for rows.Next() {
 		var schedule = Schedule{
@@ -111,8 +120,13 @@ func (js JobStorage) GetSchedulesWithStatus(status ScheduleStatus) ([]*Schedule,
 		}
 		err = rows.Scan(&schedule.Id, &schedule.Description, &schedule.Status, &schedule.Attempt, &schedule.Frequency,
 			&schedule.RetryPolicy.Strategy, &schedule.RetryPolicy.Count, &schedule.RetryPolicy.Interval,
-			&schedule.LastExecutionDate, &schedule.NextExecutionDate, &schedule.Job.Id, &schedule.Job.Slug)
+			&schedule.LastExecutionDate, &schedule.NextExecutionDate, &schedule.Job.Id, &schedule.Job.Slug, &jobData)
 
+		if err != nil {
+			return nil, err
+		}
+
+		err = json.Unmarshal([]byte(jobData), &schedule.Job.Data)
 		if err != nil {
 			return nil, err
 		}
@@ -125,7 +139,7 @@ func (js JobStorage) GetSchedulesWithStatus(status ScheduleStatus) ([]*Schedule,
 
 func (js JobStorage) GetSchedulesReadyToReschedule() ([]*Schedule, error) {
 	sql := `SELECT js.id, js.description, js.status, js.attempt, js.frequency, js.retry_policy_strategy, js.retry_policy_count, 
-				js.retry_policy_interval, js.last_execution_date, js.next_execution_date, j.id, j.slug
+				js.retry_policy_interval, js.last_execution_date, js.next_execution_date, j.id, j.slug, j.data
 			FROM jobs AS j 
 			JOIN job_schedule AS js ON js.id = j.schedule_id
 			WHERE (status = $1 OR status = $2) AND next_execution_date <= $3`
@@ -136,6 +150,7 @@ func (js JobStorage) GetSchedulesReadyToReschedule() ([]*Schedule, error) {
 		return nil, err
 	}
 
+	var jobData string
 	schedules := make([]*Schedule, 0)
 	for rows.Next() {
 		var schedule = Schedule{
@@ -144,8 +159,13 @@ func (js JobStorage) GetSchedulesReadyToReschedule() ([]*Schedule, error) {
 		}
 		err = rows.Scan(&schedule.Id, &schedule.Description, &schedule.Status, &schedule.Attempt, &schedule.Frequency,
 			&schedule.RetryPolicy.Strategy, &schedule.RetryPolicy.Count, &schedule.RetryPolicy.Interval,
-			&schedule.LastExecutionDate, &schedule.NextExecutionDate, &schedule.Job.Id, &schedule.Job.Slug)
+			&schedule.LastExecutionDate, &schedule.NextExecutionDate, &schedule.Job.Id, &schedule.Job.Slug, &jobData)
 
+		if err != nil {
+			return nil, err
+		}
+
+		err = json.Unmarshal([]byte(jobData), &schedule.Job.Data)
 		if err != nil {
 			return nil, err
 		}
@@ -158,7 +178,7 @@ func (js JobStorage) GetSchedulesReadyToReschedule() ([]*Schedule, error) {
 
 func (js JobStorage) GetAll() ([]*Schedule, error) {
 	sql := `SELECT js.id, js.description, js.status, js.attempt, js.frequency, js.retry_policy_strategy, js.retry_policy_count, 
-				js.retry_policy_interval, js.last_execution_date, js.next_execution_date, j.id, j.slug
+				js.retry_policy_interval, js.last_execution_date, js.next_execution_date, j.id, j.slug, j.data
 			FROM jobs AS j 
 			JOIN job_schedule AS js ON js.id = j.schedule_id`
 
@@ -174,10 +194,18 @@ func (js JobStorage) GetAll() ([]*Schedule, error) {
 			RetryPolicy: RetryPolicy{},
 			Job:         &Job{},
 		}
+
+		var jobData string
+
 		err = rows.Scan(&schedule.Id, &schedule.Description, &schedule.Status, &schedule.Attempt, &schedule.Frequency,
 			&schedule.RetryPolicy.Strategy, &schedule.RetryPolicy.Count, &schedule.RetryPolicy.Interval,
-			&schedule.LastExecutionDate, &schedule.NextExecutionDate, &schedule.Job.Id, &schedule.Job.Slug)
+			&schedule.LastExecutionDate, &schedule.NextExecutionDate, &schedule.Job.Id, &schedule.Job.Slug, &jobData)
 
+		if err != nil {
+			return nil, err
+		}
+
+		err = json.Unmarshal([]byte(jobData), &schedule.Job.Data)
 		if err != nil {
 			return nil, err
 		}
@@ -207,8 +235,13 @@ func (js JobStorage) Add(schedule Schedule) error {
 		return err
 	}
 
+	jobData, err := json.Marshal(schedule.Job.Data)
+	if err != nil {
+		return err
+	}
+
 	_, err = tx.Exec(context.Background(),
-		"INSERT INTO jobs VALUES ($1, $2, $3)", schedule.Job.Id, schedule.Id, schedule.Job.Slug)
+		"INSERT INTO jobs VALUES ($1, $2, $3, $4)", schedule.Job.Id, schedule.Id, schedule.Job.Slug, jobData)
 
 	if err != nil {
 		var pgErr *pgconn.PgError

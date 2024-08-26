@@ -17,7 +17,7 @@ Content-Type: application/json
 {
     "description": "test job description",
     "frequency": "*/1 * * * *",
-    "schedule_start": "",
+    "schedule_start": "2024-08-25T21:18:55+02:00",
     "job": {
         "slug": "test-example-job-1"
     },
@@ -25,6 +25,28 @@ Content-Type: application/json
         "strategy": "constant",
         "interval": "1m",
         "count": 25
+    }
+}
+
+### Create schedule
+# "ns", "us" (or "µs"), "ms", "s", "m", "h".
+# @name schedule
+POST {{baseAddress}}/api/v1/schedules
+Content-Type: application/json
+
+{
+    "description": "test job description",
+    "frequency": "once",
+    "job": {
+        "slug": "test-example-job-1",
+        "data": {
+            "userId": "545753464587546"
+        }
+    },
+    "retry_policy": {
+        "strategy": "constant",
+        "interval": "5s",
+        "count": 3
     }
 }
 

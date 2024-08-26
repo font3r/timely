@@ -35,6 +35,7 @@ func GetSchedules(str *scheduler.JobStorage) ([]ScheduleDto, error) {
 			Job: JobDto{
 				Id:   schedule.Job.Id,
 				Slug: schedule.Job.Slug,
+				Data: schedule.Job.Data,
 			},
 		})
 	}

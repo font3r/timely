@@ -1,11 +1,10 @@
 package scheduler
 
 import (
-	"github.com/robfig/cron/v3"
-	"log"
-	"time"
-
 	"github.com/google/uuid"
+	"github.com/robfig/cron/v3"
+	"time"
+	log "timely/logger"
 )
 
 type ScheduleStatus string
@@ -31,10 +30,13 @@ type Schedule struct {
 }
 
 type ScheduleJobEvent struct {
-	JobName string `json:"jobName"`
+	Job  string          `json:"job"`
+	Data *map[string]any `json:"data"`
 }
 
-func NewSchedule(description, frequency, slug string, policy RetryPolicy, scheduleStart *time.Time) Schedule {
+func NewSchedule(description, frequency, slug string, data *map[string]any,
+	policy RetryPolicy, scheduleStart *time.Time) Schedule {
+
 	execution := getFirstExecution(frequency, scheduleStart)
 
 	return Schedule{
@@ -49,6 +51,7 @@ func NewSchedule(description, frequency, slug string, policy RetryPolicy, schedu
 		Job: &Job{
 			Id:   uuid.New(),
 			Slug: slug,
+			Data: data,
 		},
 	}
 }
@@ -76,10 +79,13 @@ func (s *Schedule) Start(t *Transport, result chan<- error) {
 	}
 
 	err = t.Publish(string(ExchangeJobSchedule), s.Job.Slug,
-		ScheduleJobEvent{JobName: s.Job.Slug})
+		ScheduleJobEvent{
+			Job:  s.Job.Slug,
+			Data: s.Job.Data,
+		})
 
 	if err != nil {
-		log.Printf("failed to start job %v", err)
+		log.Logger.Printf("failed to start job %v", err)
 
 		result <- err
 		return
@@ -91,7 +97,7 @@ func (s *Schedule) Start(t *Transport, result chan<- error) {
 	now := time.Now().Round(time.Second)
 	s.LastExecutionDate = &now
 
-	log.Printf("scheduled job %s/%s", s.Job.Id, s.Job.Slug)
+	log.Logger.Printf("scheduled job %s/%s", s.Job.Id, s.Job.Slug)
 	result <- nil
 }
 
@@ -99,6 +105,7 @@ func (s *Schedule) Failed() error {
 	s.Status = Failed
 
 	if s.RetryPolicy == (RetryPolicy{}) {
+		s.NextExecutionDate = nil
 		return nil
 	}
 
@@ -117,10 +124,10 @@ func (s *Schedule) Failed() error {
 
 	if next == (time.Time{}) {
 		s.NextExecutionDate = nil
-		log.Println("schedule failed after retrying")
+		log.Logger.Println("schedule failed after retrying")
 	} else {
 		s.NextExecutionDate = &next
-		log.Printf("schedule retrying at %v\n", next)
+		log.Logger.Printf("schedule retrying at %v\n", next)
 	}
 
 	return nil
@@ -135,7 +142,6 @@ func (s *Schedule) Finished() {
 	}
 
 	sch, _ := CronParser.Parse(s.Frequency)
-
 	nextExec := sch.Next(time.Now().Round(time.Second))
 	if nextExec != (time.Time{}) {
 		s.NextExecutionDate = &nextExec

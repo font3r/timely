@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"log"
 	"slices"
 	"strings"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	log "timely/logger"
 )
 
 type Transport struct {
@@ -22,13 +22,13 @@ type Transport struct {
 func NewConnection(url string) (*Transport, error) {
 	connection, err := amqp.Dial(url)
 	if err != nil {
-		log.Printf("error during opening rabbitmq connection - %v", err)
+		log.Logger.Printf("error during opening rabbitmq connection - %v", err)
 		return nil, err
 	}
 
 	channel, err := connection.Channel()
 	if err != nil {
-		log.Printf("error during opening rabbitmq channel - %v", err)
+		log.Logger.Printf("error during opening rabbitmq channel - %v", err)
 		return nil, err
 	}
 
@@ -57,7 +57,7 @@ func (t *Transport) Publish(exchange, routingKey string, message any) error {
 		routingKey, false, false, msg)
 
 	if err != nil {
-		log.Printf("publish error - %v", err)
+		log.Logger.Printf("publish error - %v", err)
 		return err
 	}
 
@@ -73,7 +73,7 @@ func (t *Transport) Subscribe(queue string, handle func(message []byte) error) e
 	delivery, err := t.channel.ConsumeWithContext(context.Background(), queue, "", false,
 		false, false, false, amqp.Table{})
 	if err != nil {
-		log.Printf("error during consumer - %v\n", err)
+		log.Logger.Printf("error during consumer - %v\n", err)
 		return err
 	}
 
@@ -81,7 +81,7 @@ func (t *Transport) Subscribe(queue string, handle func(message []byte) error) e
 		rawMessage := <-delivery
 		err = handle(rawMessage.Body)
 		if err != nil {
-			log.Printf("error during consumer processing - %v\n", err)
+			log.Logger.Printf("error during consumer processing - %v\n", err)
 
 			err = rawMessage.Nack(false, false)
 			if err != nil {
@@ -107,7 +107,7 @@ func (t *Transport) CreateQueue(queue string) error {
 		false, amqp.Table{})
 
 	if err != nil {
-		log.Printf("creating queue error %s - %v\n", string(ExchangeJobStatus), err)
+		log.Logger.Printf("creating queue error %s - %v\n", string(ExchangeJobStatus), err)
 		return err
 	}
 
@@ -126,7 +126,7 @@ func (t *Transport) CreateExchange(exchange string) error {
 	err := t.channel.ExchangeDeclare(exchange, "direct", true, false,
 		false, false, amqp.Table{})
 	if err != nil {
-		log.Printf("creating exchange error %s - %v\n", string(ExchangeJobSchedule), err)
+		log.Logger.Printf("creating exchange error %s - %v\n", string(ExchangeJobSchedule), err)
 		return err
 	}
 
@@ -139,7 +139,7 @@ func (t *Transport) BindQueue(queue, exchange, routingKey string) error {
 	err := t.channel.QueueBind(queue, routingKey, exchange, false, amqp.Table{})
 
 	if err != nil {
-		log.Printf("exchange %s queue %s with routing key %s binding error - %v\n", exchange, queue, routingKey, err)
+		log.Logger.Printf("exchange %s queue %s with routing key %s binding error - %v\n", exchange, queue, routingKey, err)
 		return err
 	}
 
