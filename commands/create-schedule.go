@@ -18,15 +18,20 @@ type CreateScheduleCommand struct {
 	ScheduleStart *time.Time               `json:"schedule_start"`
 }
 
+type JobConfiguration struct {
+	Slug string          `json:"slug"`
+	Data *map[string]any `json:"data"`
+}
+
 type RetryPolicyConfiguration struct {
 	Strategy scheduler.StrategyType `json:"strategy"`
 	Count    int                    `json:"count"`
 	Interval string                 `json:"interval"`
 }
 
-type JobConfiguration struct {
-	Slug string          `json:"slug"`
-	Data *map[string]any `json:"data"`
+type CreateScheduleHandler struct {
+	Storage   scheduler.StorageDriver
+	Transport scheduler.TransportDriver
 }
 
 type CreateScheduleResponse struct {
@@ -36,11 +41,6 @@ type CreateScheduleResponse struct {
 var ErrJobScheduleConflict = scheduler.Error{
 	Code: "JOB_SCHEDULE_CONFLICT",
 	Msg:  "job has assigned schedule already"}
-
-type CreateScheduleHandler struct {
-	Storage   *scheduler.Pgsql
-	Transport *scheduler.Transport
-}
 
 func (h CreateScheduleHandler) CreateSchedule(req *http.Request) (*CreateScheduleResponse, error) {
 	comm, err := validate(req)

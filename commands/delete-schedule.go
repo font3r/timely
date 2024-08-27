@@ -8,7 +8,7 @@ import (
 	"timely/scheduler"
 )
 
-func DeleteSchedule(req *http.Request, str *scheduler.Pgsql) error {
+func DeleteSchedule(req *http.Request, storage scheduler.StorageDriver) error {
 	vars := mux.Vars(req)
 
 	id, err := uuid.Parse(vars["id"])
@@ -16,7 +16,7 @@ func DeleteSchedule(req *http.Request, str *scheduler.Pgsql) error {
 		return errors.New("invalid schedule id")
 	}
 
-	err = str.DeleteScheduleById(id)
+	err = storage.DeleteScheduleById(id)
 	if err != nil {
 		return err
 	}
