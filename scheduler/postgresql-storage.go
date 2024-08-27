@@ -22,6 +22,17 @@ var (
 		Msg:  "unique constraint violation"}
 )
 
+type StorageDriver interface {
+	GetScheduleById(ctx context.Context, id uuid.UUID) (*Schedule, error)
+	GetScheduleByJobSlug(slug string) (*Schedule, error)
+	GetSchedulesWithStatus(status ScheduleStatus) ([]*Schedule, error)
+	GetSchedulesReadyToReschedule() ([]*Schedule, error)
+	GetAll() ([]*Schedule, error)
+	Add(schedule Schedule) error
+	DeleteScheduleById(id uuid.UUID) error
+	UpdateSchedule(schedule *Schedule) error
+}
+
 type JobStorage struct {
 	pool *pgxpool.Pool
 }
@@ -35,7 +46,7 @@ func NewJobStorage(connectionString string) (*JobStorage, error) {
 	return &JobStorage{pool: dbPool}, nil
 }
 
-func (js JobStorage) GetScheduleById(id uuid.UUID) (*Schedule, error) {
+func (js JobStorage) GetScheduleById(ctx context.Context, id uuid.UUID) (*Schedule, error) {
 	var schedule = Schedule{
 		RetryPolicy: RetryPolicy{},
 		Job:         &Job{},
@@ -49,7 +60,7 @@ func (js JobStorage) GetScheduleById(id uuid.UUID) (*Schedule, error) {
 
 	var jobData string
 
-	err := js.pool.QueryRow(context.Background(), sql, id).
+	err := js.pool.QueryRow(ctx, sql, id).
 		Scan(&schedule.Id, &schedule.Description, &schedule.Status, &schedule.Attempt, &schedule.Frequency, &schedule.RetryPolicy.Strategy,
 			&schedule.RetryPolicy.Count, &schedule.RetryPolicy.Interval, &schedule.LastExecutionDate,
 			&schedule.NextExecutionDate, &schedule.Job.Id, &schedule.Job.Slug, &jobData)
