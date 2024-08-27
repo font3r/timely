@@ -8,7 +8,7 @@ import (
 	"timely/scheduler"
 )
 
-func DeleteSchedule(req *http.Request, str *scheduler.JobStorage) error {
+func DeleteSchedule(req *http.Request, str *scheduler.Pgsql) error {
 	vars := mux.Vars(req)
 
 	id, err := uuid.Parse(vars["id"])

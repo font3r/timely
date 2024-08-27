@@ -4,7 +4,7 @@ import (
 	"timely/scheduler"
 )
 
-func GetSchedules(str *scheduler.JobStorage) ([]ScheduleDto, error) {
+func GetSchedules(str *scheduler.Pgsql) ([]ScheduleDto, error) {
 	schedules, err := str.GetAll()
 
 	if err != nil {

@@ -38,7 +38,7 @@ var ErrJobScheduleConflict = scheduler.Error{
 	Msg:  "job has assigned schedule already"}
 
 type CreateScheduleHandler struct {
-	Storage   *scheduler.JobStorage
+	Storage   *scheduler.Pgsql
 	Transport *scheduler.Transport
 }
 

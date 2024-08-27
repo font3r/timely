@@ -71,14 +71,14 @@ func getFirstExecution(frequency string, scheduleStart *time.Time) time.Time {
 	return sch.Next(time.Now().Round(time.Second))
 }
 
-func (s *Schedule) Start(t *Transport, result chan<- error) {
-	err := t.BindQueue(s.Job.Slug, string(ExchangeJobSchedule), s.Job.Slug)
+func (s *Schedule) Start(transport TransportDriver, result chan<- error) {
+	err := transport.BindQueue(s.Job.Slug, string(ExchangeJobSchedule), s.Job.Slug)
 	if err != nil {
 		result <- err
 		return
 	}
 
-	err = t.Publish(string(ExchangeJobSchedule), s.Job.Slug,
+	err = transport.Publish(string(ExchangeJobSchedule), s.Job.Slug,
 		ScheduleJobEvent{
 			Job:  s.Job.Slug,
 			Data: s.Job.Data,

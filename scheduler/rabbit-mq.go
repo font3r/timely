@@ -12,6 +12,14 @@ import (
 	log "timely/logger"
 )
 
+type TransportDriver interface {
+	Publish(exchange, routingKey string, message any) error
+	Subscribe(queue string, handle func(message []byte) error) error
+	CreateQueue(queue string) error
+	CreateExchange(exchange string) error
+	BindQueue(queue, exchange, routingKey string) error
+}
+
 type Transport struct {
 	connection        *amqp.Connection
 	channel           *amqp.Channel // TODO: performace - support for multiple channels - channel is very fragile, closed on error
@@ -19,7 +27,7 @@ type Transport struct {
 	declaredExchanges []string
 }
 
-func NewConnection(url string) (*Transport, error) {
+func NewTransportConnection(url string) (*Transport, error) {
 	connection, err := amqp.Dial(url)
 	if err != nil {
 		log.Logger.Printf("error during opening rabbitmq connection - %v", err)

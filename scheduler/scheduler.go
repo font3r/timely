@@ -10,8 +10,8 @@ import (
 
 type Scheduler struct {
 	Id        uuid.UUID
-	Storage   *JobStorage
-	Transport *Transport
+	Storage   StorageDriver
+	Transport TransportDriver
 }
 
 type JobStatusEvent struct {
@@ -32,27 +32,27 @@ var (
 		Msg:  "fetch failed schedules failed"}
 )
 
-func Start(str *JobStorage, tra *Transport) *Scheduler {
+func Start(storage StorageDriver, transport TransportDriver) *Scheduler {
 	schedulerId := uuid.New()
 	scheduler := Scheduler{
 		Id:        schedulerId,
-		Storage:   str,
-		Transport: tra,
+		Storage:   storage,
+		Transport: transport,
 	}
 
 	log.Logger.Printf("starting scheduler with id %s\n", schedulerId)
 
-	err := createTransportDependencies(tra)
+	err := createTransportDependencies(transport)
 	if err != nil {
 		log.Logger.Printf("creating internal exchanges/queues error - %v", err)
 		return nil
 	}
 
-	go func(str *JobStorage, tra *Transport) {
+	go func(storage StorageDriver, transport TransportDriver) {
 		tickResult := make(chan error)
 
 		for {
-			go processTick(str, tra, tickResult)
+			go processTick(storage, transport, tickResult)
 
 			err = <-tickResult
 			if err != nil {
@@ -61,30 +61,30 @@ func Start(str *JobStorage, tra *Transport) *Scheduler {
 
 			time.Sleep(time.Second)
 		}
-	}(str, tra)
+	}(storage, transport)
 
-	go processJobEvents(tra, str)
+	go processJobEvents(storage, transport)
 
 	return &scheduler
 }
 
-func createTransportDependencies(tran *Transport) error {
-	err := tran.CreateExchange(string(ExchangeJobSchedule))
+func createTransportDependencies(transport TransportDriver) error {
+	err := transport.CreateExchange(string(ExchangeJobSchedule))
 	if err != nil {
 		return nil
 	}
 
-	err = tran.CreateExchange(string(ExchangeJobStatus))
+	err = transport.CreateExchange(string(ExchangeJobStatus))
 	if err != nil {
 		return err
 	}
 
-	err = tran.CreateQueue(string(QueueJobStatus))
+	err = transport.CreateQueue(string(QueueJobStatus))
 	if err != nil {
 		return err
 	}
 
-	err = tran.BindQueue(string(QueueJobStatus), string(ExchangeJobStatus),
+	err = transport.BindQueue(string(QueueJobStatus), string(ExchangeJobStatus),
 		string(RoutingKeyJobStatus))
 	if err != nil {
 		return err
@@ -93,8 +93,8 @@ func createTransportDependencies(tran *Transport) error {
 	return nil
 }
 
-func processTick(str *JobStorage, tr *Transport, tickResult chan<- error) {
-	schedules, err := getSchedulesReadyToStart(str)
+func processTick(storage StorageDriver, transport TransportDriver, tickResult chan<- error) {
+	schedules, err := getSchedulesReadyToStart(storage)
 	if err != nil {
 		tickResult <- err
 		return
@@ -102,7 +102,7 @@ func processTick(str *JobStorage, tr *Transport, tickResult chan<- error) {
 
 	for _, schedule := range schedules {
 		scheduleResult := make(chan error)
-		go schedule.Start(tr, scheduleResult)
+		go schedule.Start(transport, scheduleResult)
 
 		scheduleStartError := <-scheduleResult
 		if scheduleStartError != nil {
@@ -110,7 +110,7 @@ func processTick(str *JobStorage, tr *Transport, tickResult chan<- error) {
 			return
 		}
 
-		err = str.UpdateSchedule(schedule)
+		err = storage.UpdateSchedule(schedule)
 		if err != nil {
 			log.Logger.Printf("error updating schedule status - %v\n", err)
 			tickResult <- err
@@ -121,8 +121,8 @@ func processTick(str *JobStorage, tr *Transport, tickResult chan<- error) {
 	tickResult <- nil
 }
 
-func processJobEvents(tra *Transport, storage *JobStorage) {
-	err := tra.Subscribe(string(QueueJobStatus), func(message []byte) error {
+func processJobEvents(storage StorageDriver, transport TransportDriver) {
+	err := transport.Subscribe(string(QueueJobStatus), func(message []byte) error {
 		return handleJobEvent(message, storage)
 	})
 
@@ -132,7 +132,7 @@ func processJobEvents(tra *Transport, storage *JobStorage) {
 	}
 }
 
-func handleJobEvent(message []byte, storage *JobStorage) error {
+func handleJobEvent(message []byte, storage StorageDriver) error {
 	jobStatus := JobStatusEvent{}
 	err := json.Unmarshal(message, &jobStatus)
 	if err != nil {
@@ -173,14 +173,14 @@ func handleJobEvent(message []byte, storage *JobStorage) error {
 	return nil
 }
 
-func getSchedulesReadyToStart(str *JobStorage) ([]*Schedule, error) {
-	readySchedules, err := str.GetSchedulesWithStatus(New)
+func getSchedulesReadyToStart(storage StorageDriver) ([]*Schedule, error) {
+	readySchedules, err := storage.GetSchedulesWithStatus(New)
 	if err != nil {
 		log.Logger.Printf("fetch new schedules error - %v\n", err)
 		return nil, ErrFetchNewSchedules
 	}
 
-	rescheduleReady, err := str.GetSchedulesReadyToReschedule()
+	rescheduleReady, err := storage.GetSchedulesReadyToReschedule()
 	if err != nil {
 		log.Logger.Printf("fetch failed schedules error - %v\n", err)
 		return nil, ErrFetchFailedSchedules

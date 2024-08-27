@@ -40,6 +40,13 @@ type JobDto struct {
 	Data *map[string]any `json:"data"`
 }
 
+var (
+	ErrScheduleNotFound = &scheduler.Error{
+		Code: "SCHEDULE_NOT_FOUND",
+		Msg:  "schedule not found",
+	}
+)
+
 func (h GetScheduleHandler) Handle(ctx context.Context, q GetSchedule) (ScheduleDto, error) {
 	schedule, err := h.Storage.GetScheduleById(ctx, q.ScheduleId)
 	if err != nil {
@@ -47,7 +54,7 @@ func (h GetScheduleHandler) Handle(ctx context.Context, q GetSchedule) (Schedule
 	}
 
 	if schedule == nil {
-		return ScheduleDto{}, nil
+		return ScheduleDto{}, ErrScheduleNotFound
 	}
 
 	var retry *RetryPolicyDto

@@ -30,12 +30,12 @@ func main() {
 		Handler: r,
 	}
 
-	storage, err := scheduler.NewJobStorage(viper.GetString("database.connectionString"))
+	storage, err := scheduler.NewPgsqlConnection(viper.GetString("database.connectionString"))
 	if err != nil {
 		log.Logger.Fatal(err)
 	}
 
-	transport, err := scheduler.NewConnection(viper.GetString("transport.rabbitmq.connectionString"))
+	transport, err := scheduler.NewTransportConnection(viper.GetString("transport.rabbitmq.connectionString"))
 	if err != nil {
 		panic(fmt.Sprintf("create transport error %s", err))
 	}

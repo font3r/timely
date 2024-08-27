@@ -33,20 +33,20 @@ type StorageDriver interface {
 	UpdateSchedule(schedule *Schedule) error
 }
 
-type JobStorage struct {
+type Pgsql struct {
 	pool *pgxpool.Pool
 }
 
-func NewJobStorage(connectionString string) (*JobStorage, error) {
+func NewPgsqlConnection(connectionString string) (*Pgsql, error) {
 	dbPool, err := pgxpool.New(context.Background(), connectionString)
 	if err != nil {
 		return nil, err
 	}
 
-	return &JobStorage{pool: dbPool}, nil
+	return &Pgsql{pool: dbPool}, nil
 }
 
-func (js JobStorage) GetScheduleById(ctx context.Context, id uuid.UUID) (*Schedule, error) {
+func (pg Pgsql) GetScheduleById(ctx context.Context, id uuid.UUID) (*Schedule, error) {
 	var schedule = Schedule{
 		RetryPolicy: RetryPolicy{},
 		Job:         &Job{},
@@ -60,10 +60,10 @@ func (js JobStorage) GetScheduleById(ctx context.Context, id uuid.UUID) (*Schedu
 
 	var jobData string
 
-	err := js.pool.QueryRow(ctx, sql, id).
-		Scan(&schedule.Id, &schedule.Description, &schedule.Status, &schedule.Attempt, &schedule.Frequency, &schedule.RetryPolicy.Strategy,
-			&schedule.RetryPolicy.Count, &schedule.RetryPolicy.Interval, &schedule.LastExecutionDate,
-			&schedule.NextExecutionDate, &schedule.Job.Id, &schedule.Job.Slug, &jobData)
+	err := pg.pool.QueryRow(ctx, sql, id).
+		Scan(&schedule.Id, &schedule.Description, &schedule.Status, &schedule.Attempt, &schedule.Frequency,
+			&schedule.RetryPolicy.Strategy, &schedule.RetryPolicy.Count, &schedule.RetryPolicy.Interval,
+			&schedule.LastExecutionDate, &schedule.NextExecutionDate, &schedule.Job.Id, &schedule.Job.Slug, &jobData)
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -81,7 +81,7 @@ func (js JobStorage) GetScheduleById(ctx context.Context, id uuid.UUID) (*Schedu
 	return &schedule, nil
 }
 
-func (js JobStorage) GetScheduleByJobSlug(slug string) (*Schedule, error) {
+func (pg Pgsql) GetScheduleByJobSlug(slug string) (*Schedule, error) {
 	var schedule = Schedule{
 		RetryPolicy: RetryPolicy{},
 		Job:         &Job{},
@@ -93,7 +93,7 @@ func (js JobStorage) GetScheduleByJobSlug(slug string) (*Schedule, error) {
 			JOIN job_schedule AS js ON js.id = j.schedule_id
 			WHERE j.slug = $1`
 
-	err := js.pool.QueryRow(context.Background(), sql, slug).
+	err := pg.pool.QueryRow(context.Background(), sql, slug).
 		Scan(&schedule.Id, &schedule.Description, &schedule.Status, &schedule.Attempt, &schedule.Frequency, &schedule.RetryPolicy.Strategy,
 			&schedule.RetryPolicy.Count, &schedule.RetryPolicy.Interval, &schedule.LastExecutionDate,
 			&schedule.NextExecutionDate, &schedule.Job.Id, &schedule.Job.Slug)
@@ -109,14 +109,14 @@ func (js JobStorage) GetScheduleByJobSlug(slug string) (*Schedule, error) {
 	return &schedule, nil
 }
 
-func (js JobStorage) GetSchedulesWithStatus(status ScheduleStatus) ([]*Schedule, error) {
+func (pg Pgsql) GetSchedulesWithStatus(status ScheduleStatus) ([]*Schedule, error) {
 	sql := `SELECT js.id, js.description, js.status, js.attempt, js.frequency, js.retry_policy_strategy, js.retry_policy_count, 
 				js.retry_policy_interval, js.last_execution_date, js.next_execution_date, j.id, j.slug, j.data
 			FROM jobs AS j 
 			JOIN job_schedule AS js ON js.id = j.schedule_id
 			WHERE status = $1 AND next_execution_date <= $2`
 
-	rows, err := js.pool.Query(context.Background(), sql, status, time.Now())
+	rows, err := pg.pool.Query(context.Background(), sql, status, time.Now())
 
 	if err != nil {
 		return nil, err
@@ -148,14 +148,14 @@ func (js JobStorage) GetSchedulesWithStatus(status ScheduleStatus) ([]*Schedule,
 	return schedules, nil
 }
 
-func (js JobStorage) GetSchedulesReadyToReschedule() ([]*Schedule, error) {
+func (pg Pgsql) GetSchedulesReadyToReschedule() ([]*Schedule, error) {
 	sql := `SELECT js.id, js.description, js.status, js.attempt, js.frequency, js.retry_policy_strategy, js.retry_policy_count, 
 				js.retry_policy_interval, js.last_execution_date, js.next_execution_date, j.id, j.slug, j.data
 			FROM jobs AS j 
 			JOIN job_schedule AS js ON js.id = j.schedule_id
 			WHERE (status = $1 OR status = $2) AND next_execution_date <= $3`
 
-	rows, err := js.pool.Query(context.Background(), sql, Failed, Finished, time.Now())
+	rows, err := pg.pool.Query(context.Background(), sql, Failed, Finished, time.Now())
 
 	if err != nil {
 		return nil, err
@@ -187,13 +187,13 @@ func (js JobStorage) GetSchedulesReadyToReschedule() ([]*Schedule, error) {
 	return schedules, nil
 }
 
-func (js JobStorage) GetAll() ([]*Schedule, error) {
+func (pg Pgsql) GetAll() ([]*Schedule, error) {
 	sql := `SELECT js.id, js.description, js.status, js.attempt, js.frequency, js.retry_policy_strategy, js.retry_policy_count, 
 				js.retry_policy_interval, js.last_execution_date, js.next_execution_date, j.id, j.slug, j.data
 			FROM jobs AS j 
 			JOIN job_schedule AS js ON js.id = j.schedule_id`
 
-	rows, err := js.pool.Query(context.Background(), sql)
+	rows, err := pg.pool.Query(context.Background(), sql)
 
 	if err != nil {
 		return nil, err
@@ -227,8 +227,8 @@ func (js JobStorage) GetAll() ([]*Schedule, error) {
 	return schedules, nil
 }
 
-func (js JobStorage) Add(schedule Schedule) error {
-	tx, err := js.pool.Begin(context.Background())
+func (pg Pgsql) Add(schedule Schedule) error {
+	tx, err := pg.pool.Begin(context.Background())
 	if err != nil {
 		return err
 	}
@@ -278,8 +278,8 @@ func (js JobStorage) Add(schedule Schedule) error {
 	return nil
 }
 
-func (js JobStorage) DeleteScheduleById(id uuid.UUID) error {
-	tx, err := js.pool.Begin(context.Background())
+func (pg Pgsql) DeleteScheduleById(id uuid.UUID) error {
+	tx, err := pg.pool.Begin(context.Background())
 	if err != nil {
 		return err
 	}
@@ -309,10 +309,10 @@ func (js JobStorage) DeleteScheduleById(id uuid.UUID) error {
 	return nil
 }
 
-func (js JobStorage) UpdateSchedule(schedule *Schedule) error {
+func (pg Pgsql) UpdateSchedule(schedule *Schedule) error {
 	sql := `UPDATE job_schedule SET last_execution_date = $1, next_execution_date = $2, attempt = $3, status = $4 WHERE id = $5`
 
-	_, err := js.pool.Exec(context.Background(), sql,
+	_, err := pg.pool.Exec(context.Background(), sql,
 		schedule.LastExecutionDate, schedule.NextExecutionDate, schedule.Attempt, schedule.Status, schedule.Id)
 
 	if err != nil {
