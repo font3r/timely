@@ -1,14 +1,20 @@
 package queries
 
 import (
-	"errors"
-	"net/http"
+	"context"
 	"time"
 	"timely/scheduler"
 
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 )
+
+type GetSchedule struct {
+	ScheduleId uuid.UUID
+}
+
+type GetScheduleHandler struct {
+	Storage scheduler.StorageDriver
+}
 
 type ScheduleDto struct {
 	Id                uuid.UUID                `json:"id"`
@@ -34,15 +40,8 @@ type JobDto struct {
 	Data *map[string]any `json:"data"`
 }
 
-func GetSchedule(req *http.Request, str *scheduler.JobStorage) (ScheduleDto, error) {
-	vars := mux.Vars(req)
-
-	id, err := uuid.Parse(vars["id"])
-	if err != nil {
-		return ScheduleDto{}, errors.New("invalid schedule id")
-	}
-
-	schedule, err := str.GetScheduleById(id)
+func (h GetScheduleHandler) Handle(ctx context.Context, q GetSchedule) (ScheduleDto, error) {
+	schedule, err := h.Storage.GetScheduleById(ctx, q.ScheduleId)
 	if err != nil {
 		return ScheduleDto{}, err
 	}

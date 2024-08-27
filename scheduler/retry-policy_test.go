@@ -55,7 +55,7 @@ func TestRetryPolicyCreate(t *testing.T) {
 				}
 			} else {
 				if rp != test.expected {
-					t.Errorf("expect error %s, got %s", test.expectErr, err.Error())
+					t.Errorf("expect result %+v, got %+v", test.expected, rp)
 				}
 			}
 		})

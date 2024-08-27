@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"net/http"
 	testjobhandler "timely/cmd"
 	"timely/commands"
@@ -71,7 +72,17 @@ func registerRoutes(router *mux.Router, app *Application) {
 	v1 := router.PathPrefix("/api/v1").Subrouter()
 
 	v1.HandleFunc("/schedules/{id}", func(w http.ResponseWriter, req *http.Request) {
-		result, err := queries.GetSchedule(req, app.Scheduler.Storage)
+		vars := mux.Vars(req)
+		id, err := uuid.Parse(vars["id"])
+
+		if err != nil {
+			problem(w, errors.New("invalid schedule id"))
+			return
+		}
+
+		h := queries.GetScheduleHandler{Storage: app.Scheduler.Storage}
+		result, err := h.Handle(req.Context(), queries.GetSchedule{ScheduleId: id})
+
 		if err != nil {
 			problem(w, err)
 			return
