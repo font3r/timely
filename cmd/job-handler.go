@@ -26,7 +26,7 @@ type ScheduleJobEvent struct {
 func Start() {
 	log.Logger.Println("starting ...")
 
-	tra, err := scheduler.NewConnection(viper.GetString("transport.rabbitmq.connectionString"))
+	tra, err := scheduler.NewTransportConnection(viper.GetString("transport.rabbitmq.connectionString"))
 	if err != nil {
 		panic(fmt.Sprintf("test-app: create transport error - %s", err))
 	}

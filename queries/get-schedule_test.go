@@ -16,10 +16,12 @@ func TestGetSchedule(t *testing.T) {
 		expectErr string
 	}{
 		"storage_returns_error": {
+			id:        uuid.Nil,
 			expectErr: "storage error",
 		},
 		"schedule_with_id_does_not_exist": {
-			expected: ScheduleDto{},
+			id:        uuid.New(),
+			expectErr: ErrScheduleNotFound.Error(),
 		},
 	}
 
@@ -41,58 +43,70 @@ func TestGetSchedule(t *testing.T) {
 	}
 }
 
-type storageDriverMock struct {
-}
-
-func (s storageDriverMock) GetScheduleById(ctx context.Context, id uuid.UUID) (*scheduler.Schedule, error) {
-	return &scheduler.Schedule{}, errors.New("storage error")
-}
-
-func (s storageDriverMock) GetScheduleByJobSlug(slug string) (*scheduler.Schedule, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s storageDriverMock) GetSchedulesWithStatus(status scheduler.ScheduleStatus) ([]*scheduler.Schedule, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s storageDriverMock) GetSchedulesReadyToReschedule() ([]*scheduler.Schedule, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s storageDriverMock) GetAll() ([]*scheduler.Schedule, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s storageDriverMock) Add(schedule scheduler.Schedule) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s storageDriverMock) DeleteScheduleById(id uuid.UUID) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (s storageDriverMock) UpdateSchedule(schedule *scheduler.Schedule) error {
-	//TODO implement me
-	panic("implement me")
-}
-
 type dependencies struct {
 	storageDriver *storageDriverMock
 	handler       GetScheduleHandler
 }
 
 func getDeps() dependencies {
-	storageDriver := &storageDriverMock{}
+	storageDriver := &storageDriverMock{
+		Schedules: []scheduler.Schedule{
+			{
+				Id:                uuid.UUID{},
+				Description:       "",
+				Frequency:         "",
+				Status:            "",
+				Attempt:           0,
+				RetryPolicy:       scheduler.RetryPolicy{},
+				LastExecutionDate: nil,
+				NextExecutionDate: nil,
+				Job:               nil,
+			},
+		},
+	}
 
 	return dependencies{
 		storageDriver: storageDriver,
 		handler:       GetScheduleHandler{Storage: storageDriver},
 	}
+}
+
+type storageDriverMock struct {
+	Schedules []scheduler.Schedule
+}
+
+func (s storageDriverMock) GetScheduleById(ctx context.Context, id uuid.UUID) (*scheduler.Schedule, error) {
+	if id == uuid.Nil {
+		return nil, errors.New("storage error")
+	}
+
+	return &scheduler.Schedule{}, ErrScheduleNotFound
+}
+
+func (s storageDriverMock) GetScheduleByJobSlug(slug string) (*scheduler.Schedule, error) {
+	panic("implement me")
+}
+
+func (s storageDriverMock) GetSchedulesWithStatus(status scheduler.ScheduleStatus) ([]*scheduler.Schedule, error) {
+	panic("implement me")
+}
+
+func (s storageDriverMock) GetSchedulesReadyToReschedule() ([]*scheduler.Schedule, error) {
+	panic("implement me")
+}
+
+func (s storageDriverMock) GetAll() ([]*scheduler.Schedule, error) {
+	panic("implement me")
+}
+
+func (s storageDriverMock) Add(schedule scheduler.Schedule) error {
+	panic("implement me")
+}
+
+func (s storageDriverMock) DeleteScheduleById(id uuid.UUID) error {
+	panic("implement me")
+}
+
+func (s storageDriverMock) UpdateSchedule(schedule *scheduler.Schedule) error {
+	panic("implement me")
 }

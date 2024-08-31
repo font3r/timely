@@ -1,0 +1,206 @@
+package main
+
+import (
+	"encoding/json"
+	"errors"
+	"github.com/google/uuid"
+	"github.com/gorilla/mux"
+	"net/http"
+	"time"
+	"timely/commands"
+	"timely/queries"
+	"timely/scheduler"
+)
+
+func registerRoutes(router *mux.Router, app *Application) {
+	v1 := router.PathPrefix("/api/v1").Subrouter()
+
+	createSchedule(v1, app)
+	getSchedule(v1, app)
+	getSchedules(v1, app)
+	deleteSchedule(v1, app)
+	deleteSchedules(v1, app)
+}
+
+func createSchedule(v1 *mux.Router, app *Application) {
+	v1.HandleFunc("/schedules", func(w http.ResponseWriter, req *http.Request) {
+		c, err := validateCreateSchedule(req)
+		if err != nil {
+			problem(w, http.StatusBadRequest, err)
+		}
+
+		h := commands.CreateScheduleHandler{
+			Storage:   app.Scheduler.Storage,
+			Transport: app.Scheduler.Transport,
+		}
+
+		result, err := h.Handle(req.Context(), c)
+		if err != nil {
+			if errors.Is(err, commands.ErrJobScheduleConflict) {
+				problem(w, http.StatusConflict, err)
+				return
+			}
+
+			problem(w, http.StatusUnprocessableEntity, err)
+			return
+		}
+
+		ok(w, result)
+	}).Headers(scheduler.ContentTypeHeader, scheduler.ApplicationJson).Methods("POST")
+}
+
+func validateCreateSchedule(req *http.Request) (commands.CreateScheduleCommand, error) {
+	comm := &commands.CreateScheduleCommand{}
+
+	if err := json.NewDecoder(req.Body).Decode(&comm); err != nil {
+		return commands.CreateScheduleCommand{}, err
+	}
+
+	var err error
+
+	if comm.Description == "" {
+		err = errors.Join(errors.New("invalid description"))
+	}
+
+	if comm.Frequency == "" {
+		err = errors.Join(errors.New("missing frequency configuration"))
+	}
+
+	if comm.Frequency != string(scheduler.Once) {
+		_, err = scheduler.CronParser.Parse(comm.Frequency)
+		if err != nil {
+			err = errors.Join(errors.New("invalid frequency configuration"))
+		}
+	}
+
+	if comm.ScheduleStart != nil && time.Now().After(*comm.ScheduleStart) {
+		err = errors.Join(errors.New("invalid schedule start"))
+	}
+
+	if comm.Job == (commands.JobConfiguration{}) {
+		err = errors.Join(errors.New("missing job configuration"))
+	}
+
+	if comm.Job.Slug == "" {
+		err = errors.Join(errors.New("invalid job slug"))
+	}
+
+	if err != nil {
+		return commands.CreateScheduleCommand{}, err
+	}
+
+	return *comm, nil
+}
+
+func getSchedule(v1 *mux.Router, app *Application) {
+	v1.HandleFunc("/schedules/{id}", func(w http.ResponseWriter, req *http.Request) {
+		vars := mux.Vars(req)
+		id, err := uuid.Parse(vars["id"])
+
+		if err != nil {
+			problem(w, http.StatusBadRequest, errors.New("invalid schedule id"))
+			return
+		}
+
+		h := queries.GetScheduleHandler{Storage: app.Scheduler.Storage}
+		result, err := h.Handle(req.Context(), queries.GetSchedule{ScheduleId: id})
+
+		if err != nil {
+			problem(w, http.StatusUnprocessableEntity, err)
+			return
+		}
+
+		if result == (queries.ScheduleDto{}) {
+			notFound(w)
+			return
+		}
+
+		ok(w, result)
+	}).Methods("GET")
+}
+
+func getSchedules(v1 *mux.Router, app *Application) {
+	v1.HandleFunc("/schedules", func(w http.ResponseWriter, req *http.Request) {
+		h := queries.GetSchedulesHandler{Storage: app.Scheduler.Storage}
+		result, err := h.Handle(req.Context())
+
+		if err != nil {
+			problem(w, http.StatusUnprocessableEntity, err)
+			return
+		}
+
+		ok(w, result)
+	}).Methods("GET")
+}
+
+func deleteSchedule(v1 *mux.Router, app *Application) {
+	v1.HandleFunc("/schedules/{id}", func(w http.ResponseWriter, req *http.Request) {
+		vars := mux.Vars(req)
+		id, err := uuid.Parse(vars["id"])
+
+		if err != nil {
+			problem(w, http.StatusBadRequest, errors.New("invalid schedule id"))
+			return
+		}
+
+		h := commands.DeleteScheduleHandler{Storage: app.Scheduler.Storage}
+		err = h.Handle(req.Context(), commands.DeleteSchedule{Id: id})
+
+		if err != nil {
+			problem(w, http.StatusUnprocessableEntity, err)
+			return
+		}
+
+		noContent(w)
+	}).Methods("DELETE")
+}
+
+func deleteSchedules(v1 *mux.Router, app *Application) {
+	v1.HandleFunc("/schedules", func(w http.ResponseWriter, req *http.Request) {
+		schedules, err := app.Scheduler.Storage.GetAll(req.Context())
+		if err != nil {
+			problem(w, http.StatusUnprocessableEntity, err)
+		}
+
+		for _, schedule := range schedules {
+			err = app.Scheduler.Storage.DeleteScheduleById(req.Context(), schedule.Id)
+			if err != nil {
+				problem(w, http.StatusUnprocessableEntity, err)
+				return
+			}
+		}
+
+		noContent(w)
+	}).Methods("DELETE")
+}
+
+func ok(w http.ResponseWriter, data any) {
+	w.Header().Set(scheduler.ContentTypeHeader, scheduler.ApplicationJson)
+	w.WriteHeader(http.StatusOK)
+
+	jsonData, _ := json.Marshal(data)
+	_, _ = w.Write(jsonData)
+}
+
+func noContent(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func notFound(w http.ResponseWriter) {
+	w.WriteHeader(http.StatusNotFound)
+}
+
+func problem(w http.ResponseWriter, statusCode int, err error) {
+	w.Header().Set(scheduler.ContentTypeHeader, scheduler.ApplicationJson)
+	w.WriteHeader(statusCode)
+
+	var e scheduler.Error
+	var data []byte
+	if castOk := errors.As(err, &e); castOk {
+		data, _ = json.Marshal(map[string]string{"code": e.Code, "error": e.Msg})
+	} else {
+		data, _ = json.Marshal(map[string]string{"error": err.Error()})
+	}
+
+	_, _ = w.Write(data)
+}

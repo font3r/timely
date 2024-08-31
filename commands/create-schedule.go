@@ -1,9 +1,8 @@
 package commands
 
 import (
-	"encoding/json"
+	"context"
 	"errors"
-	"net/http"
 	"time"
 	"timely/scheduler"
 
@@ -18,15 +17,20 @@ type CreateScheduleCommand struct {
 	ScheduleStart *time.Time               `json:"schedule_start"`
 }
 
+type JobConfiguration struct {
+	Slug string          `json:"slug"`
+	Data *map[string]any `json:"data"`
+}
+
 type RetryPolicyConfiguration struct {
 	Strategy scheduler.StrategyType `json:"strategy"`
 	Count    int                    `json:"count"`
 	Interval string                 `json:"interval"`
 }
 
-type JobConfiguration struct {
-	Slug string          `json:"slug"`
-	Data *map[string]any `json:"data"`
+type CreateScheduleHandler struct {
+	Storage   scheduler.StorageDriver
+	Transport scheduler.TransportDriver
 }
 
 type CreateScheduleResponse struct {
@@ -37,26 +41,16 @@ var ErrJobScheduleConflict = scheduler.Error{
 	Code: "JOB_SCHEDULE_CONFLICT",
 	Msg:  "job has assigned schedule already"}
 
-type CreateScheduleHandler struct {
-	Storage   *scheduler.JobStorage
-	Transport *scheduler.Transport
-}
-
-func (h CreateScheduleHandler) CreateSchedule(req *http.Request) (*CreateScheduleResponse, error) {
-	comm, err := validate(req)
+func (h CreateScheduleHandler) Handle(ctx context.Context, c CreateScheduleCommand) (*CreateScheduleResponse, error) {
+	retryPolicy, err := getRetryPolicy(c.RetryPolicy)
 	if err != nil {
 		return nil, err
 	}
 
-	retryPolicy, err := getRetryPolicy(comm.RetryPolicy)
-	if err != nil {
-		return nil, err
-	}
+	schedule := scheduler.NewSchedule(c.Description, c.Frequency, c.Job.Slug,
+		c.Job.Data, retryPolicy, c.ScheduleStart)
 
-	schedule := scheduler.NewSchedule(comm.Description, comm.Frequency, comm.Job.Slug,
-		comm.Job.Data, retryPolicy, comm.ScheduleStart)
-
-	if err = h.Storage.Add(schedule); err != nil {
+	if err = h.Storage.Add(ctx, schedule); err != nil {
 		if errors.Is(err, scheduler.ErrUniqueConstraintViolation) {
 			return nil, ErrJobScheduleConflict
 		}
@@ -74,49 +68,6 @@ func (h CreateScheduleHandler) CreateSchedule(req *http.Request) (*CreateSchedul
 	}
 
 	return &CreateScheduleResponse{Id: schedule.Id}, nil
-}
-
-func validate(req *http.Request) (*CreateScheduleCommand, error) {
-	comm := &CreateScheduleCommand{}
-
-	if err := json.NewDecoder(req.Body).Decode(&comm); err != nil {
-		return nil, err
-	}
-
-	var err error
-
-	if comm.Description == "" {
-		err = errors.Join(errors.New("invalid description"))
-	}
-
-	if comm.Frequency == "" {
-		err = errors.Join(errors.New("missing frequency configuration"))
-	}
-
-	if comm.Frequency != string(scheduler.Once) {
-		_, err = scheduler.CronParser.Parse(comm.Frequency)
-		if err != nil {
-			err = errors.Join(errors.New("invalid frequency configuration"))
-		}
-	}
-
-	if comm.ScheduleStart != nil && time.Now().After(*comm.ScheduleStart) {
-		err = errors.Join(errors.New("invalid schedule start"))
-	}
-
-	if comm.Job == (JobConfiguration{}) {
-		err = errors.Join(errors.New("missing job configuration"))
-	}
-
-	if comm.Job.Slug == "" {
-		err = errors.Join(errors.New("invalid job slug"))
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	return comm, nil
 }
 
 func getRetryPolicy(retryPolicyConf RetryPolicyConfiguration) (scheduler.RetryPolicy, error) {

@@ -1,15 +1,12 @@
 package main
 
 import (
-	"encoding/json"
+	"context"
 	"errors"
 	"fmt"
-	"github.com/google/uuid"
 	"net/http"
 	testjobhandler "timely/cmd"
-	"timely/commands"
 	log "timely/logger"
-	"timely/queries"
 	"timely/scheduler"
 
 	"github.com/spf13/viper"
@@ -30,18 +27,18 @@ func main() {
 		Handler: r,
 	}
 
-	storage, err := scheduler.NewJobStorage(viper.GetString("database.connectionString"))
+	storage, err := scheduler.NewPgsqlConnection(context.Background(), viper.GetString("database.connectionString"))
 	if err != nil {
 		log.Logger.Fatal(err)
 	}
 
-	transport, err := scheduler.NewConnection(viper.GetString("transport.rabbitmq.connectionString"))
+	transport, err := scheduler.NewTransportConnection(viper.GetString("transport.rabbitmq.connectionString"))
 	if err != nil {
 		panic(fmt.Sprintf("create transport error %s", err))
 	}
 
 	app := &Application{
-		Scheduler: scheduler.Start(storage, transport),
+		Scheduler: scheduler.Start(context.Background(), storage, transport),
 	}
 
 	registerRoutes(r, app)
@@ -66,116 +63,4 @@ func loadConfig() {
 			log.Logger.Panicf("Config file error - %s", err)
 		}
 	}
-}
-
-func registerRoutes(router *mux.Router, app *Application) {
-	v1 := router.PathPrefix("/api/v1").Subrouter()
-
-	v1.HandleFunc("/schedules/{id}", func(w http.ResponseWriter, req *http.Request) {
-		vars := mux.Vars(req)
-		id, err := uuid.Parse(vars["id"])
-
-		if err != nil {
-			problem(w, errors.New("invalid schedule id"))
-			return
-		}
-
-		h := queries.GetScheduleHandler{Storage: app.Scheduler.Storage}
-		result, err := h.Handle(req.Context(), queries.GetSchedule{ScheduleId: id})
-
-		if err != nil {
-			problem(w, err)
-			return
-		}
-
-		if result == (queries.ScheduleDto{}) {
-			notFound(w)
-			return
-		}
-
-		ok(w, result)
-	}).Methods("GET")
-
-	v1.HandleFunc("/schedules/{id}", func(w http.ResponseWriter, req *http.Request) {
-		err := commands.DeleteSchedule(req, app.Scheduler.Storage)
-		if err != nil {
-			problem(w, err)
-			return
-		}
-
-		noContent(w)
-	}).Methods("DELETE")
-
-	v1.HandleFunc("/schedules", func(w http.ResponseWriter, req *http.Request) {
-		schedules, err := app.Scheduler.Storage.GetAll()
-		if err != nil {
-			problem(w, err)
-		}
-
-		for _, schedule := range schedules {
-			err = app.Scheduler.Storage.DeleteScheduleById(schedule.Id)
-			if err != nil {
-				problem(w, err)
-				return
-			}
-		}
-
-		noContent(w)
-	}).Methods("DELETE")
-
-	v1.HandleFunc("/schedules", func(w http.ResponseWriter, req *http.Request) {
-		handler := commands.CreateScheduleHandler{
-			Storage:   app.Scheduler.Storage,
-			Transport: app.Scheduler.Transport,
-		}
-
-		result, err := handler.CreateSchedule(req)
-		if err != nil {
-			problem(w, err)
-			return
-		}
-
-		ok(w, result)
-	}).Headers(scheduler.ContentTypeHeader, scheduler.ApplicationJson).Methods("POST")
-
-	v1.HandleFunc("/schedules", func(w http.ResponseWriter, req *http.Request) {
-		result, err := queries.GetSchedules(app.Scheduler.Storage)
-		if err != nil {
-			problem(w, err)
-			return
-		}
-
-		ok(w, result)
-	}).Methods("GET")
-}
-
-func ok(w http.ResponseWriter, data any) {
-	w.Header().Set(scheduler.ContentTypeHeader, scheduler.ApplicationJson)
-	w.WriteHeader(http.StatusOK)
-
-	jsonData, _ := json.Marshal(data)
-	_, _ = w.Write(jsonData)
-}
-
-func noContent(w http.ResponseWriter) {
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func notFound(w http.ResponseWriter) {
-	w.WriteHeader(http.StatusNotFound)
-}
-
-func problem(w http.ResponseWriter, err error) {
-	w.Header().Set(scheduler.ContentTypeHeader, scheduler.ApplicationJson)
-	w.WriteHeader(http.StatusBadRequest)
-
-	var e scheduler.Error
-	var data []byte
-	if castOk := errors.As(err, &e); castOk {
-		data, _ = json.Marshal(map[string]string{"code": e.Code, "error": e.Msg})
-	} else {
-		data, _ = json.Marshal(map[string]string{"error": err.Error()})
-	}
-
-	_, _ = w.Write(data)
 }
