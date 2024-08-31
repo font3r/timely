@@ -1,22 +1,21 @@
 package commands
 
 import (
-	"errors"
+	"context"
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
-	"net/http"
 	"timely/scheduler"
 )
 
-func DeleteSchedule(req *http.Request, storage scheduler.StorageDriver) error {
-	vars := mux.Vars(req)
+type DeleteSchedule struct {
+	Id uuid.UUID
+}
 
-	id, err := uuid.Parse(vars["id"])
-	if err != nil {
-		return errors.New("invalid schedule id")
-	}
+type DeleteScheduleHandler struct {
+	Storage scheduler.StorageDriver
+}
 
-	err = storage.DeleteScheduleById(id)
+func (h DeleteScheduleHandler) Handle(ctx context.Context, c DeleteSchedule) error {
+	err := h.Storage.DeleteScheduleById(ctx, c.Id)
 	if err != nil {
 		return err
 	}

@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"context"
 	"encoding/json"
 	"time"
 	log "timely/logger"
@@ -32,7 +33,7 @@ var (
 		Msg:  "fetch failed schedules failed"}
 )
 
-func Start(storage StorageDriver, transport TransportDriver) *Scheduler {
+func Start(ctx context.Context, storage StorageDriver, transport TransportDriver) *Scheduler {
 	schedulerId := uuid.New()
 	scheduler := Scheduler{
 		Id:        schedulerId,
@@ -52,7 +53,7 @@ func Start(storage StorageDriver, transport TransportDriver) *Scheduler {
 		tickResult := make(chan error)
 
 		for {
-			go processTick(storage, transport, tickResult)
+			go processTick(ctx, storage, transport, tickResult)
 
 			err = <-tickResult
 			if err != nil {
@@ -63,7 +64,7 @@ func Start(storage StorageDriver, transport TransportDriver) *Scheduler {
 		}
 	}(storage, transport)
 
-	go processJobEvents(storage, transport)
+	go processJobEvents(ctx, storage, transport)
 
 	return &scheduler
 }
@@ -93,8 +94,8 @@ func createTransportDependencies(transport TransportDriver) error {
 	return nil
 }
 
-func processTick(storage StorageDriver, transport TransportDriver, tickResult chan<- error) {
-	schedules, err := getSchedulesReadyToStart(storage)
+func processTick(ctx context.Context, storage StorageDriver, transport TransportDriver, tickResult chan<- error) {
+	schedules, err := getSchedulesReadyToStart(ctx, storage)
 	if err != nil {
 		tickResult <- err
 		return
@@ -110,7 +111,7 @@ func processTick(storage StorageDriver, transport TransportDriver, tickResult ch
 			return
 		}
 
-		err = storage.UpdateSchedule(schedule)
+		err = storage.UpdateSchedule(ctx, schedule)
 		if err != nil {
 			log.Logger.Printf("error updating schedule status - %v\n", err)
 			tickResult <- err
@@ -121,9 +122,9 @@ func processTick(storage StorageDriver, transport TransportDriver, tickResult ch
 	tickResult <- nil
 }
 
-func processJobEvents(storage StorageDriver, transport TransportDriver) {
+func processJobEvents(ctx context.Context, storage StorageDriver, transport TransportDriver) {
 	err := transport.Subscribe(string(QueueJobStatus), func(message []byte) error {
-		return handleJobEvent(message, storage)
+		return handleJobEvent(ctx, message, storage)
 	})
 
 	if err != nil {
@@ -132,14 +133,14 @@ func processJobEvents(storage StorageDriver, transport TransportDriver) {
 	}
 }
 
-func handleJobEvent(message []byte, storage StorageDriver) error {
+func handleJobEvent(ctx context.Context, message []byte, storage StorageDriver) error {
 	jobStatus := JobStatusEvent{}
 	err := json.Unmarshal(message, &jobStatus)
 	if err != nil {
 		return err
 	}
 
-	schedule, err := storage.GetScheduleByJobSlug(jobStatus.JobSlug)
+	schedule, err := storage.GetScheduleByJobSlug(ctx, jobStatus.JobSlug)
 	if err != nil {
 		return err
 	}
@@ -165,7 +166,7 @@ func handleJobEvent(message []byte, storage StorageDriver) error {
 		schedule.Finished() // TODO: after one time schedules we have to clean transport
 	}
 
-	err = storage.UpdateSchedule(schedule)
+	err = storage.UpdateSchedule(ctx, schedule)
 	if err != nil {
 		return err
 	}
@@ -173,14 +174,14 @@ func handleJobEvent(message []byte, storage StorageDriver) error {
 	return nil
 }
 
-func getSchedulesReadyToStart(storage StorageDriver) ([]*Schedule, error) {
-	readySchedules, err := storage.GetSchedulesWithStatus(New)
+func getSchedulesReadyToStart(ctx context.Context, storage StorageDriver) ([]*Schedule, error) {
+	readySchedules, err := storage.GetSchedulesWithStatus(ctx, New)
 	if err != nil {
 		log.Logger.Printf("fetch new schedules error - %v\n", err)
 		return nil, ErrFetchNewSchedules
 	}
 
-	rescheduleReady, err := storage.GetSchedulesReadyToReschedule()
+	rescheduleReady, err := storage.GetSchedulesReadyToReschedule(ctx)
 	if err != nil {
 		log.Logger.Printf("fetch failed schedules error - %v\n", err)
 		return nil, ErrFetchFailedSchedules

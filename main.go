@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -30,7 +31,7 @@ func main() {
 		Handler: r,
 	}
 
-	storage, err := scheduler.NewPgsqlConnection(viper.GetString("database.connectionString"))
+	storage, err := scheduler.NewPgsqlConnection(context.Background(), viper.GetString("database.connectionString"))
 	if err != nil {
 		log.Logger.Fatal(err)
 	}
@@ -41,7 +42,7 @@ func main() {
 	}
 
 	app := &Application{
-		Scheduler: scheduler.Start(storage, transport),
+		Scheduler: scheduler.Start(context.Background(), storage, transport),
 	}
 
 	registerRoutes(r, app)
@@ -97,7 +98,17 @@ func registerRoutes(router *mux.Router, app *Application) {
 	}).Methods("GET")
 
 	v1.HandleFunc("/schedules/{id}", func(w http.ResponseWriter, req *http.Request) {
-		err := commands.DeleteSchedule(req, app.Scheduler.Storage)
+		vars := mux.Vars(req)
+		id, err := uuid.Parse(vars["id"])
+
+		if err != nil {
+			problem(w, errors.New("invalid schedule id"))
+			return
+		}
+
+		h := commands.DeleteScheduleHandler{Storage: app.Scheduler.Storage}
+		err = h.Handle(req.Context(), commands.DeleteSchedule{Id: id})
+
 		if err != nil {
 			problem(w, err)
 			return
@@ -107,13 +118,13 @@ func registerRoutes(router *mux.Router, app *Application) {
 	}).Methods("DELETE")
 
 	v1.HandleFunc("/schedules", func(w http.ResponseWriter, req *http.Request) {
-		schedules, err := app.Scheduler.Storage.GetAll()
+		schedules, err := app.Scheduler.Storage.GetAll(req.Context())
 		if err != nil {
 			problem(w, err)
 		}
 
 		for _, schedule := range schedules {
-			err = app.Scheduler.Storage.DeleteScheduleById(schedule.Id)
+			err = app.Scheduler.Storage.DeleteScheduleById(req.Context(), schedule.Id)
 			if err != nil {
 				problem(w, err)
 				return
@@ -124,12 +135,12 @@ func registerRoutes(router *mux.Router, app *Application) {
 	}).Methods("DELETE")
 
 	v1.HandleFunc("/schedules", func(w http.ResponseWriter, req *http.Request) {
-		handler := commands.CreateScheduleHandler{
+		h := commands.CreateScheduleHandler{
 			Storage:   app.Scheduler.Storage,
 			Transport: app.Scheduler.Transport,
 		}
 
-		result, err := handler.CreateSchedule(req)
+		result, err := h.CreateSchedule(req)
 		if err != nil {
 			problem(w, err)
 			return
@@ -139,7 +150,9 @@ func registerRoutes(router *mux.Router, app *Application) {
 	}).Headers(scheduler.ContentTypeHeader, scheduler.ApplicationJson).Methods("POST")
 
 	v1.HandleFunc("/schedules", func(w http.ResponseWriter, req *http.Request) {
-		result, err := queries.GetSchedules(app.Scheduler.Storage)
+		h := queries.GetScheduleHandler{Storage: app.Scheduler.Storage}
+		result, err := h.Handle(req.Context(), queries.GetSchedule{ScheduleId: uuid.New()})
+
 		if err != nil {
 			problem(w, err)
 			return

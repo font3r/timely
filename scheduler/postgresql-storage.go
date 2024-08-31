@@ -24,21 +24,21 @@ var (
 
 type StorageDriver interface {
 	GetScheduleById(ctx context.Context, id uuid.UUID) (*Schedule, error)
-	GetScheduleByJobSlug(slug string) (*Schedule, error)
-	GetSchedulesWithStatus(status ScheduleStatus) ([]*Schedule, error)
-	GetSchedulesReadyToReschedule() ([]*Schedule, error)
-	GetAll() ([]*Schedule, error)
-	Add(schedule Schedule) error
-	DeleteScheduleById(id uuid.UUID) error
-	UpdateSchedule(schedule *Schedule) error
+	GetScheduleByJobSlug(ctx context.Context, slug string) (*Schedule, error)
+	GetSchedulesWithStatus(ctx context.Context, status ScheduleStatus) ([]*Schedule, error)
+	GetSchedulesReadyToReschedule(ctx context.Context) ([]*Schedule, error)
+	GetAll(ctx context.Context) ([]*Schedule, error)
+	Add(ctx context.Context, schedule Schedule) error
+	DeleteScheduleById(ctx context.Context, id uuid.UUID) error
+	UpdateSchedule(ctx context.Context, schedule *Schedule) error
 }
 
 type Pgsql struct {
 	pool *pgxpool.Pool
 }
 
-func NewPgsqlConnection(connectionString string) (*Pgsql, error) {
-	dbPool, err := pgxpool.New(context.Background(), connectionString)
+func NewPgsqlConnection(ctx context.Context, connectionString string) (*Pgsql, error) {
+	dbPool, err := pgxpool.New(ctx, connectionString)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func (pg Pgsql) GetScheduleById(ctx context.Context, id uuid.UUID) (*Schedule, e
 	return &schedule, nil
 }
 
-func (pg Pgsql) GetScheduleByJobSlug(slug string) (*Schedule, error) {
+func (pg Pgsql) GetScheduleByJobSlug(ctx context.Context, slug string) (*Schedule, error) {
 	var schedule = Schedule{
 		RetryPolicy: RetryPolicy{},
 		Job:         &Job{},
@@ -93,7 +93,7 @@ func (pg Pgsql) GetScheduleByJobSlug(slug string) (*Schedule, error) {
 			JOIN job_schedule AS js ON js.id = j.schedule_id
 			WHERE j.slug = $1`
 
-	err := pg.pool.QueryRow(context.Background(), sql, slug).
+	err := pg.pool.QueryRow(ctx, sql, slug).
 		Scan(&schedule.Id, &schedule.Description, &schedule.Status, &schedule.Attempt, &schedule.Frequency, &schedule.RetryPolicy.Strategy,
 			&schedule.RetryPolicy.Count, &schedule.RetryPolicy.Interval, &schedule.LastExecutionDate,
 			&schedule.NextExecutionDate, &schedule.Job.Id, &schedule.Job.Slug)
@@ -109,14 +109,14 @@ func (pg Pgsql) GetScheduleByJobSlug(slug string) (*Schedule, error) {
 	return &schedule, nil
 }
 
-func (pg Pgsql) GetSchedulesWithStatus(status ScheduleStatus) ([]*Schedule, error) {
+func (pg Pgsql) GetSchedulesWithStatus(ctx context.Context, status ScheduleStatus) ([]*Schedule, error) {
 	sql := `SELECT js.id, js.description, js.status, js.attempt, js.frequency, js.retry_policy_strategy, js.retry_policy_count, 
 				js.retry_policy_interval, js.last_execution_date, js.next_execution_date, j.id, j.slug, j.data
 			FROM jobs AS j 
 			JOIN job_schedule AS js ON js.id = j.schedule_id
 			WHERE status = $1 AND next_execution_date <= $2`
 
-	rows, err := pg.pool.Query(context.Background(), sql, status, time.Now())
+	rows, err := pg.pool.Query(ctx, sql, status, time.Now())
 
 	if err != nil {
 		return nil, err
@@ -148,14 +148,14 @@ func (pg Pgsql) GetSchedulesWithStatus(status ScheduleStatus) ([]*Schedule, erro
 	return schedules, nil
 }
 
-func (pg Pgsql) GetSchedulesReadyToReschedule() ([]*Schedule, error) {
+func (pg Pgsql) GetSchedulesReadyToReschedule(ctx context.Context) ([]*Schedule, error) {
 	sql := `SELECT js.id, js.description, js.status, js.attempt, js.frequency, js.retry_policy_strategy, js.retry_policy_count, 
 				js.retry_policy_interval, js.last_execution_date, js.next_execution_date, j.id, j.slug, j.data
 			FROM jobs AS j 
 			JOIN job_schedule AS js ON js.id = j.schedule_id
 			WHERE (status = $1 OR status = $2) AND next_execution_date <= $3`
 
-	rows, err := pg.pool.Query(context.Background(), sql, Failed, Finished, time.Now())
+	rows, err := pg.pool.Query(ctx, sql, Failed, Finished, time.Now())
 
 	if err != nil {
 		return nil, err
@@ -187,13 +187,13 @@ func (pg Pgsql) GetSchedulesReadyToReschedule() ([]*Schedule, error) {
 	return schedules, nil
 }
 
-func (pg Pgsql) GetAll() ([]*Schedule, error) {
+func (pg Pgsql) GetAll(ctx context.Context) ([]*Schedule, error) {
 	sql := `SELECT js.id, js.description, js.status, js.attempt, js.frequency, js.retry_policy_strategy, js.retry_policy_count, 
 				js.retry_policy_interval, js.last_execution_date, js.next_execution_date, j.id, j.slug, j.data
 			FROM jobs AS j 
 			JOIN job_schedule AS js ON js.id = j.schedule_id`
 
-	rows, err := pg.pool.Query(context.Background(), sql)
+	rows, err := pg.pool.Query(ctx, sql)
 
 	if err != nil {
 		return nil, err
@@ -227,19 +227,19 @@ func (pg Pgsql) GetAll() ([]*Schedule, error) {
 	return schedules, nil
 }
 
-func (pg Pgsql) Add(schedule Schedule) error {
-	tx, err := pg.pool.Begin(context.Background())
+func (pg Pgsql) Add(ctx context.Context, schedule Schedule) error {
+	tx, err := pg.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 
-	_, err = tx.Exec(context.Background(),
+	_, err = tx.Exec(ctx,
 		"INSERT INTO job_schedule VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
 		schedule.Id, schedule.Description, schedule.Status, schedule.Frequency, schedule.Attempt, schedule.RetryPolicy.Strategy,
 		schedule.RetryPolicy.Count, schedule.RetryPolicy.Interval, schedule.LastExecutionDate, schedule.NextExecutionDate)
 
 	if err != nil {
-		if txErr := tx.Rollback(context.Background()); txErr != nil {
+		if txErr := tx.Rollback(ctx); txErr != nil {
 			return txErr
 		}
 
@@ -251,68 +251,68 @@ func (pg Pgsql) Add(schedule Schedule) error {
 		return err
 	}
 
-	_, err = tx.Exec(context.Background(),
+	_, err = tx.Exec(ctx,
 		"INSERT INTO jobs VALUES ($1, $2, $3, $4)", schedule.Job.Id, schedule.Id, schedule.Job.Slug, jobData)
 
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == UniqueConstraintViolation {
-			if txErr := tx.Rollback(context.Background()); txErr != nil {
+			if txErr := tx.Rollback(ctx); txErr != nil {
 				return txErr
 			}
 
 			return ErrUniqueConstraintViolation
 		}
 
-		if txErr := tx.Rollback(context.Background()); txErr != nil {
+		if txErr := tx.Rollback(ctx); txErr != nil {
 			return txErr
 		}
 
 		return err
 	}
 
-	if err = tx.Commit(context.Background()); err != nil {
+	if err = tx.Commit(ctx); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (pg Pgsql) DeleteScheduleById(id uuid.UUID) error {
-	tx, err := pg.pool.Begin(context.Background())
+func (pg Pgsql) DeleteScheduleById(ctx context.Context, id uuid.UUID) error {
+	tx, err := pg.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 
-	_, err = tx.Exec(context.Background(), `DELETE FROM jobs WHERE schedule_id = $1`, id)
+	_, err = tx.Exec(ctx, `DELETE FROM jobs WHERE schedule_id = $1`, id)
 	if err != nil {
-		if txErr := tx.Rollback(context.Background()); txErr != nil {
+		if txErr := tx.Rollback(ctx); txErr != nil {
 			return txErr
 		}
 
 		return err
 	}
 
-	_, err = tx.Exec(context.Background(), `DELETE FROM job_schedule WHERE id = $1`, id)
+	_, err = tx.Exec(ctx, `DELETE FROM job_schedule WHERE id = $1`, id)
 	if err != nil {
-		if txErr := tx.Rollback(context.Background()); txErr != nil {
+		if txErr := tx.Rollback(ctx); txErr != nil {
 			return txErr
 		}
 
 		return err
 	}
 
-	if err = tx.Commit(context.Background()); err != nil {
+	if err = tx.Commit(ctx); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (pg Pgsql) UpdateSchedule(schedule *Schedule) error {
+func (pg Pgsql) UpdateSchedule(ctx context.Context, schedule *Schedule) error {
 	sql := `UPDATE job_schedule SET last_execution_date = $1, next_execution_date = $2, attempt = $3, status = $4 WHERE id = $5`
 
-	_, err := pg.pool.Exec(context.Background(), sql,
+	_, err := pg.pool.Exec(ctx, sql,
 		schedule.LastExecutionDate, schedule.NextExecutionDate, schedule.Attempt, schedule.Status, schedule.Id)
 
 	if err != nil {

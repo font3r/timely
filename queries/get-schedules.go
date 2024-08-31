@@ -1,11 +1,18 @@
 package queries
 
 import (
+	"context"
 	"timely/scheduler"
 )
 
-func GetSchedules(storage scheduler.StorageDriver) ([]ScheduleDto, error) {
-	schedules, err := storage.GetAll()
+type GetSchedules struct{}
+
+type GetSchedulesHandler struct {
+	Storage scheduler.StorageDriver
+}
+
+func (h GetSchedulesHandler) Handle(ctx context.Context) ([]ScheduleDto, error) {
+	schedules, err := h.Storage.GetAll(ctx)
 
 	if err != nil {
 		return []ScheduleDto{}, err
