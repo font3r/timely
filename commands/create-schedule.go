@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -42,7 +43,7 @@ var ErrJobScheduleConflict = scheduler.Error{
 	Code: "JOB_SCHEDULE_CONFLICT",
 	Msg:  "job has assigned schedule already"}
 
-func (h CreateScheduleHandler) CreateSchedule(req *http.Request) (*CreateScheduleResponse, error) {
+func (h CreateScheduleHandler) Handle(ctx context.Context, req *http.Request) (*CreateScheduleResponse, error) {
 	comm, err := validate(req)
 	if err != nil {
 		return nil, err
@@ -56,7 +57,7 @@ func (h CreateScheduleHandler) CreateSchedule(req *http.Request) (*CreateSchedul
 	schedule := scheduler.NewSchedule(comm.Description, comm.Frequency, comm.Job.Slug,
 		comm.Job.Data, retryPolicy, comm.ScheduleStart)
 
-	if err = h.Storage.Add(schedule); err != nil {
+	if err = h.Storage.Add(ctx, schedule); err != nil {
 		if errors.Is(err, scheduler.ErrUniqueConstraintViolation) {
 			return nil, ErrJobScheduleConflict
 		}
@@ -76,6 +77,7 @@ func (h CreateScheduleHandler) CreateSchedule(req *http.Request) (*CreateSchedul
 	return &CreateScheduleResponse{Id: schedule.Id}, nil
 }
 
+// TODO: separate validation?
 func validate(req *http.Request) (*CreateScheduleCommand, error) {
 	comm := &CreateScheduleCommand{}
 

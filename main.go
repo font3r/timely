@@ -140,7 +140,7 @@ func registerRoutes(router *mux.Router, app *Application) {
 			Transport: app.Scheduler.Transport,
 		}
 
-		result, err := h.CreateSchedule(req)
+		result, err := h.Handle(req.Context(), req)
 		if err != nil {
 			problem(w, err)
 			return
