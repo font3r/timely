@@ -27,6 +27,7 @@ func createSchedule(v1 *mux.Router, app *Application) {
 		c, err := validateCreateSchedule(req)
 		if err != nil {
 			problem(w, http.StatusBadRequest, err)
+			return
 		}
 
 		h := commands.CreateScheduleHandler{
@@ -106,12 +107,12 @@ func getSchedule(v1 *mux.Router, app *Application) {
 		result, err := h.Handle(req.Context(), queries.GetSchedule{ScheduleId: id})
 
 		if err != nil {
-			problem(w, http.StatusUnprocessableEntity, err)
-			return
-		}
+			if errors.Is(err, queries.ErrScheduleNotFound) {
+				problem(w, http.StatusNotFound, err)
+				return
+			}
 
-		if result == (queries.ScheduleDto{}) {
-			notFound(w)
+			problem(w, http.StatusUnprocessableEntity, err)
 			return
 		}
 
@@ -160,6 +161,7 @@ func deleteSchedules(v1 *mux.Router, app *Application) {
 		schedules, err := app.Scheduler.Storage.GetAll(req.Context())
 		if err != nil {
 			problem(w, http.StatusUnprocessableEntity, err)
+			return
 		}
 
 		for _, schedule := range schedules {
@@ -184,10 +186,6 @@ func ok(w http.ResponseWriter, data any) {
 
 func noContent(w http.ResponseWriter) {
 	w.WriteHeader(http.StatusNoContent)
-}
-
-func notFound(w http.ResponseWriter) {
-	w.WriteHeader(http.StatusNotFound)
 }
 
 func problem(w http.ResponseWriter, statusCode int, err error) {

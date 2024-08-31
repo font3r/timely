@@ -27,7 +27,9 @@ func main() {
 		Handler: r,
 	}
 
-	storage, err := scheduler.NewPgsqlConnection(context.Background(), viper.GetString("database.connectionString"))
+	ctx := context.Background()
+
+	storage, err := scheduler.NewPgsqlConnection(ctx, viper.GetString("database.connectionString"))
 	if err != nil {
 		log.Logger.Fatal(err)
 	}
@@ -38,7 +40,7 @@ func main() {
 	}
 
 	app := &Application{
-		Scheduler: scheduler.Start(context.Background(), storage, transport),
+		Scheduler: scheduler.Start(ctx, storage, transport),
 	}
 
 	registerRoutes(r, app)
