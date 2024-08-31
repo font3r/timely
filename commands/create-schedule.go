@@ -2,9 +2,7 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"net/http"
 	"time"
 	"timely/scheduler"
 
@@ -43,19 +41,14 @@ var ErrJobScheduleConflict = scheduler.Error{
 	Code: "JOB_SCHEDULE_CONFLICT",
 	Msg:  "job has assigned schedule already"}
 
-func (h CreateScheduleHandler) Handle(ctx context.Context, req *http.Request) (*CreateScheduleResponse, error) {
-	comm, err := validate(req)
+func (h CreateScheduleHandler) Handle(ctx context.Context, c CreateScheduleCommand) (*CreateScheduleResponse, error) {
+	retryPolicy, err := getRetryPolicy(c.RetryPolicy)
 	if err != nil {
 		return nil, err
 	}
 
-	retryPolicy, err := getRetryPolicy(comm.RetryPolicy)
-	if err != nil {
-		return nil, err
-	}
-
-	schedule := scheduler.NewSchedule(comm.Description, comm.Frequency, comm.Job.Slug,
-		comm.Job.Data, retryPolicy, comm.ScheduleStart)
+	schedule := scheduler.NewSchedule(c.Description, c.Frequency, c.Job.Slug,
+		c.Job.Data, retryPolicy, c.ScheduleStart)
 
 	if err = h.Storage.Add(ctx, schedule); err != nil {
 		if errors.Is(err, scheduler.ErrUniqueConstraintViolation) {
@@ -75,50 +68,6 @@ func (h CreateScheduleHandler) Handle(ctx context.Context, req *http.Request) (*
 	}
 
 	return &CreateScheduleResponse{Id: schedule.Id}, nil
-}
-
-// TODO: separate validation?
-func validate(req *http.Request) (*CreateScheduleCommand, error) {
-	comm := &CreateScheduleCommand{}
-
-	if err := json.NewDecoder(req.Body).Decode(&comm); err != nil {
-		return nil, err
-	}
-
-	var err error
-
-	if comm.Description == "" {
-		err = errors.Join(errors.New("invalid description"))
-	}
-
-	if comm.Frequency == "" {
-		err = errors.Join(errors.New("missing frequency configuration"))
-	}
-
-	if comm.Frequency != string(scheduler.Once) {
-		_, err = scheduler.CronParser.Parse(comm.Frequency)
-		if err != nil {
-			err = errors.Join(errors.New("invalid frequency configuration"))
-		}
-	}
-
-	if comm.ScheduleStart != nil && time.Now().After(*comm.ScheduleStart) {
-		err = errors.Join(errors.New("invalid schedule start"))
-	}
-
-	if comm.Job == (JobConfiguration{}) {
-		err = errors.Join(errors.New("missing job configuration"))
-	}
-
-	if comm.Job.Slug == "" {
-		err = errors.Join(errors.New("invalid job slug"))
-	}
-
-	if err != nil {
-		return nil, err
-	}
-
-	return comm, nil
 }
 
 func getRetryPolicy(retryPolicyConf RetryPolicyConfiguration) (scheduler.RetryPolicy, error) {
