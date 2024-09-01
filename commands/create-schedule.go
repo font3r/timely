@@ -2,7 +2,6 @@ package commands
 
 import (
 	"context"
-	"errors"
 	"time"
 	"timely/scheduler"
 
@@ -51,9 +50,6 @@ func (h CreateScheduleHandler) Handle(ctx context.Context, c CreateScheduleComma
 		c.Job.Data, retryPolicy, c.ScheduleStart)
 
 	if err = h.Storage.Add(ctx, schedule); err != nil {
-		if errors.Is(err, scheduler.ErrUniqueConstraintViolation) {
-			return nil, ErrJobScheduleConflict
-		}
 		return nil, err
 	}
 

@@ -71,6 +71,7 @@ func (h GetScheduleHandler) Handle(ctx context.Context, q GetSchedule) (Schedule
 		Description:       schedule.Description,
 		Frequency:         schedule.Frequency,
 		Status:            schedule.Status,
+		Attempt:           schedule.Attempt,
 		RetryPolicy:       retry,
 		LastExecutionDate: schedule.LastExecutionDate,
 		NextExecutionDate: schedule.NextExecutionDate,

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"math/rand"
 	"time"
 	log "timely/logger"
@@ -13,14 +14,16 @@ import (
 )
 
 type JobStatusEvent struct {
-	JobSlug string `json:"job_slug"`
-	Status  string `json:"status"`
-	Reason  string `json:"reason"`
+	ScheduleId uuid.UUID `json:"schedule_id"`
+	JobSlug    string    `json:"job_slug"`
+	Status     string    `json:"status"`
+	Reason     string    `json:"reason"`
 }
 
 type ScheduleJobEvent struct {
-	Job  string          `json:"job"`
-	Data *map[string]any `json:"data"`
+	ScheduleId uuid.UUID       `json:"schedule_id"`
+	Job        string          `json:"job"`
+	Data       *map[string]any `json:"data"`
 }
 
 func Start() {
@@ -49,7 +52,7 @@ func Start() {
 					log.Logger.Printf("job data slug %s with data %+v", jobSlug, *event.Data)
 				}
 
-				err = processMockJob(tra, jobSlug)
+				err = processMockJob(tra, event.ScheduleId, jobSlug)
 				if err != nil {
 					log.Logger.Printf("error during job processing - %s", err)
 				}
@@ -65,16 +68,17 @@ func Start() {
 	}
 }
 
-func processMockJob(tra *scheduler.Transport, jobSlug string) error {
+func processMockJob(tra *scheduler.Transport, scheduleId uuid.UUID, jobSlug string) error {
 	var seq int16 = 0
 
 	for i := 0; i < 10; i++ {
-		if rand.Intn(10) < 1 { // random 10% failure rate for testing
+		if rand.Intn(10) < 10 { // random 10% failure rate for testing
 			err := tra.Publish(string(scheduler.ExchangeJobStatus),
 				string(scheduler.RoutingKeyJobStatus), JobStatusEvent{
-					JobSlug: jobSlug,
-					Status:  "failed",
-					Reason:  "failed due to jitter error",
+					ScheduleId: scheduleId,
+					JobSlug:    jobSlug,
+					Status:     "failed",
+					Reason:     "failed due to jitter error",
 				})
 
 			if err != nil {
@@ -86,8 +90,9 @@ func processMockJob(tra *scheduler.Transport, jobSlug string) error {
 
 		err := tra.Publish(string(scheduler.ExchangeJobStatus),
 			string(scheduler.RoutingKeyJobStatus), JobStatusEvent{
-				JobSlug: jobSlug,
-				Status:  "processing",
+				ScheduleId: scheduleId,
+				JobSlug:    jobSlug,
+				Status:     "processing",
 			})
 
 		if err != nil {
@@ -100,9 +105,10 @@ func processMockJob(tra *scheduler.Transport, jobSlug string) error {
 
 	err := tra.Publish(string(scheduler.ExchangeJobStatus),
 		string(scheduler.RoutingKeyJobStatus), JobStatusEvent{
-			JobSlug: jobSlug,
-			Status:  "finished",
-			Reason:  "success",
+			ScheduleId: scheduleId,
+			JobSlug:    jobSlug,
+			Status:     "finished",
+			Reason:     "success",
 		})
 
 	if err != nil {

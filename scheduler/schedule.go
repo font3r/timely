@@ -30,8 +30,9 @@ type Schedule struct {
 }
 
 type ScheduleJobEvent struct {
-	Job  string          `json:"job"`
-	Data *map[string]any `json:"data"`
+	ScheduleId uuid.UUID       `json:"schedule_id"`
+	Job        string          `json:"job"`
+	Data       *map[string]any `json:"data"`
 }
 
 func NewSchedule(description, frequency, slug string, data *map[string]any,
@@ -80,8 +81,9 @@ func (s *Schedule) Start(transport TransportDriver, result chan<- error) {
 
 	err = transport.Publish(string(ExchangeJobSchedule), s.Job.Slug,
 		ScheduleJobEvent{
-			Job:  s.Job.Slug,
-			Data: s.Job.Data,
+			ScheduleId: s.Id,
+			Job:        s.Job.Slug,
+			Data:       s.Job.Data,
 		})
 
 	if err != nil {
@@ -115,7 +117,7 @@ func (s *Schedule) Failed() error {
 	if s.NextExecutionDate != nil {
 		next, err = s.RetryPolicy.GetNextExecutionTime(*s.NextExecutionDate, s.Attempt)
 	} else {
-		next, err = s.RetryPolicy.GetNextExecutionTime(*s.LastExecutionDate, s.Attempt)
+		next, err = s.RetryPolicy.GetNextExecutionTime(time.Now(), s.Attempt)
 	}
 
 	if err != nil {

@@ -8,23 +8,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
-)
-
-const (
-	UniqueConstraintViolation = "23505"
-)
-
-var (
-	ErrUniqueConstraintViolation = &Error{
-		Code: "UNIQUE_CONSTRAINT_VIOLATION",
-		Msg:  "unique constraint violation"}
 )
 
 type StorageDriver interface {
 	GetScheduleById(ctx context.Context, id uuid.UUID) (*Schedule, error)
-	GetScheduleByJobSlug(ctx context.Context, slug string) (*Schedule, error)
 	GetSchedulesWithStatus(ctx context.Context, status ScheduleStatus) ([]*Schedule, error)
 	GetSchedulesReadyToReschedule(ctx context.Context) ([]*Schedule, error)
 	GetAll(ctx context.Context) ([]*Schedule, error)
@@ -75,34 +63,6 @@ func (pg Pgsql) GetScheduleById(ctx context.Context, id uuid.UUID) (*Schedule, e
 
 	err = json.Unmarshal([]byte(jobData), &schedule.Job.Data)
 	if err != nil {
-		return nil, err
-	}
-
-	return &schedule, nil
-}
-
-func (pg Pgsql) GetScheduleByJobSlug(ctx context.Context, slug string) (*Schedule, error) {
-	var schedule = Schedule{
-		RetryPolicy: RetryPolicy{},
-		Job:         &Job{},
-	}
-
-	sql := `SELECT js.id, js.description, js.status, js.attempt, js.frequency, js.retry_policy_strategy, js.retry_policy_count, 
-				js.retry_policy_interval, js.last_execution_date, js.next_execution_date, j.id, j.slug
-			FROM jobs AS j 
-			JOIN job_schedule AS js ON js.id = j.schedule_id
-			WHERE j.slug = $1`
-
-	err := pg.pool.QueryRow(ctx, sql, slug).
-		Scan(&schedule.Id, &schedule.Description, &schedule.Status, &schedule.Attempt, &schedule.Frequency, &schedule.RetryPolicy.Strategy,
-			&schedule.RetryPolicy.Count, &schedule.RetryPolicy.Interval, &schedule.LastExecutionDate,
-			&schedule.NextExecutionDate, &schedule.Job.Id, &schedule.Job.Slug)
-
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil
-		}
-
 		return nil, err
 	}
 
@@ -255,15 +215,6 @@ func (pg Pgsql) Add(ctx context.Context, schedule Schedule) error {
 		"INSERT INTO jobs VALUES ($1, $2, $3, $4)", schedule.Job.Id, schedule.Id, schedule.Job.Slug, jobData)
 
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == UniqueConstraintViolation {
-			if txErr := tx.Rollback(ctx); txErr != nil {
-				return txErr
-			}
-
-			return ErrUniqueConstraintViolation
-		}
-
 		if txErr := tx.Rollback(ctx); txErr != nil {
 			return txErr
 		}

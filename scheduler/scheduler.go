@@ -16,9 +16,10 @@ type Scheduler struct {
 }
 
 type JobStatusEvent struct {
-	JobSlug string `json:"job_slug"`
-	Status  string `json:"status"`
-	Reason  string `json:"reason"`
+	ScheduleId uuid.UUID `json:"schedule_id"`
+	JobSlug    string    `json:"job_slug"`
+	Status     string    `json:"status"`
+	Reason     string    `json:"reason"`
 }
 
 var (
@@ -140,7 +141,7 @@ func handleJobEvent(ctx context.Context, message []byte, storage StorageDriver) 
 		return err
 	}
 
-	schedule, err := storage.GetScheduleByJobSlug(ctx, jobStatus.JobSlug)
+	schedule, err := storage.GetScheduleById(ctx, jobStatus.ScheduleId)
 	if err != nil {
 		return err
 	}
