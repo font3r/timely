@@ -178,13 +178,11 @@ func handleJobEvent(ctx context.Context, message []byte, storage StorageDriver) 
 func getSchedulesReadyToStart(ctx context.Context, storage StorageDriver) ([]*Schedule, error) {
 	readySchedules, err := storage.GetSchedulesWithStatus(ctx, New)
 	if err != nil {
-		log.Logger.Printf("fetch new schedules error - %v\n", err)
 		return nil, ErrFetchNewSchedules
 	}
 
 	rescheduleReady, err := storage.GetSchedulesReadyToReschedule(ctx)
 	if err != nil {
-		log.Logger.Printf("fetch failed schedules error - %v\n", err)
 		return nil, ErrFetchFailedSchedules
 	}
 
