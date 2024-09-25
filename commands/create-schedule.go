@@ -29,7 +29,7 @@ type RetryPolicyConfiguration struct {
 
 type CreateScheduleHandler struct {
 	Storage   scheduler.StorageDriver
-	Transport scheduler.TransportDriver
+	Transport scheduler.AsyncTransportDriver
 }
 
 type CreateScheduleResponse struct {

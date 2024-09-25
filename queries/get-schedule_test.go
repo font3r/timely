@@ -3,9 +3,10 @@ package queries
 import (
 	"context"
 	"errors"
-	"github.com/google/uuid"
 	"testing"
 	"timely/scheduler"
+
+	"github.com/google/uuid"
 )
 
 func TestGetSchedule(t *testing.T) {
@@ -83,30 +84,38 @@ func (s storageDriverMock) GetScheduleById(ctx context.Context, id uuid.UUID) (*
 	return &scheduler.Schedule{}, ErrScheduleNotFound
 }
 
-func (s storageDriverMock) GetScheduleByJobSlug(slug string) (*scheduler.Schedule, error) {
+func (s storageDriverMock) GetScheduleByJobSlug(ctx context.Context, slug string) (*scheduler.Schedule, error) {
 	panic("implement me")
 }
 
-func (s storageDriverMock) GetSchedulesWithStatus(status scheduler.ScheduleStatus) ([]*scheduler.Schedule, error) {
+func (s storageDriverMock) GetSchedulesWithStatus(ctx context.Context, status scheduler.ScheduleStatus) ([]*scheduler.Schedule, error) {
 	panic("implement me")
 }
 
-func (s storageDriverMock) GetSchedulesReadyToReschedule() ([]*scheduler.Schedule, error) {
+func (s storageDriverMock) GetSchedulesReadyToReschedule(ctx context.Context) ([]*scheduler.Schedule, error) {
 	panic("implement me")
 }
 
-func (s storageDriverMock) GetAll() ([]*scheduler.Schedule, error) {
+func (s storageDriverMock) GetAll(ctx context.Context) ([]*scheduler.Schedule, error) {
 	panic("implement me")
 }
 
-func (s storageDriverMock) Add(schedule scheduler.Schedule) error {
+func (s storageDriverMock) Add(ctx context.Context, schedule scheduler.Schedule) error {
 	panic("implement me")
 }
 
-func (s storageDriverMock) DeleteScheduleById(id uuid.UUID) error {
+func (s storageDriverMock) DeleteScheduleById(ctx context.Context, id uuid.UUID) error {
 	panic("implement me")
 }
 
-func (s storageDriverMock) UpdateSchedule(schedule *scheduler.Schedule) error {
+func (s storageDriverMock) UpdateSchedule(ctx context.Context, schedule *scheduler.Schedule) error {
+	panic("implement me")
+}
+
+func (s storageDriverMock) AddJobRun(ctx context.Context, jonRun scheduler.JobRun) error {
+	panic("implement me")
+}
+
+func (s storageDriverMock) UpdateJobRun(ctx context.Context, jonRun scheduler.JobRun) error {
 	panic("implement me")
 }

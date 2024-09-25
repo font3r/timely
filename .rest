@@ -1,5 +1,5 @@
 @baseAddress = http://localhost:5000
-@scheduleId = {{schedule.response.body.id}}
+@scheduleId = 06851d59-2aa8-4963-a476-964009ac7f7f
 
 ### Get schedule
 GET {{baseAddress}}/api/v1/schedules/{{scheduleId}}
@@ -8,8 +8,7 @@ GET {{baseAddress}}/api/v1/schedules/{{scheduleId}}
 # @name schedules
 GET {{baseAddress}}/api/v1/schedules
 
-### Create schedule
-# "ns", "us" (or "µs"), "ms", "s", "m", "h".
+### Create schedule 'cyclic' frequency, start at specific date
 # @name schedule
 POST {{baseAddress}}/api/v1/schedules
 Content-Type: application/json
@@ -28,8 +27,7 @@ Content-Type: application/json
     }
 }
 
-### Create schedule
-# "ns", "us" (or "µs"), "ms", "s", "m", "h".
+### Create schedule with 'once' frequency, starts instantly
 # @name schedule
 POST {{baseAddress}}/api/v1/schedules
 Content-Type: application/json
@@ -38,17 +36,20 @@ Content-Type: application/json
     "description": "test job description",
     "frequency": "once",
     "job": {
-        "slug": "test-example-job-1",
+        "slug": "process-user-notifications",
         "data": {
             "userId": "545753464587546"
         }
     },
     "retry_policy": {
         "strategy": "constant",
-        "interval": "5s",
+        "interval": "10s",
         "count": 3
     }
 }
 
 ### Delete schedule
 DELETE {{baseAddress}}/api/v1/schedules/{{scheduleId}}
+
+### Delete schedules
+DELETE {{baseAddress}}/api/v1/schedules

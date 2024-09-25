@@ -1,20 +1,20 @@
 package scheduler
 
 import (
-	"github.com/google/uuid"
-	"github.com/robfig/cron/v3"
 	"time"
 	log "timely/logger"
+
+	"github.com/google/uuid"
+	"github.com/robfig/cron/v3"
 )
 
 type ScheduleStatus string
 
 const (
-	New        ScheduleStatus = "new"        // created, waiting to schedule
-	Scheduled  ScheduleStatus = "scheduled"  // scheduled, waiting for application status
-	Processing ScheduleStatus = "processing" // during processing
-	Finished   ScheduleStatus = "finished"   // successfully processed
-	Failed     ScheduleStatus = "failed"     // error during processing
+	Waiting   ScheduleStatus = "waiting"   // waiting to schedule next job
+	Scheduled ScheduleStatus = "scheduled" // job scheduled
+	Succeed   ScheduleStatus = "succeed"   // successfully processed
+	Failed    ScheduleStatus = "failed"    // error during processing
 )
 
 type Schedule struct {
@@ -44,7 +44,7 @@ func NewSchedule(description, frequency, slug string, data *map[string]any,
 		Id:                uuid.New(),
 		Description:       description,
 		Frequency:         frequency,
-		Status:            New,
+		Status:            Waiting,
 		Attempt:           0,
 		RetryPolicy:       policy,
 		LastExecutionDate: nil,
@@ -72,7 +72,7 @@ func getFirstExecution(frequency string, scheduleStart *time.Time) time.Time {
 	return sch.Next(time.Now().Round(time.Second))
 }
 
-func (s *Schedule) Start(transport TransportDriver, result chan<- error) {
+func (s *Schedule) Start(transport AsyncTransportDriver, result chan<- error) {
 	err := transport.BindQueue(s.Job.Slug, string(ExchangeJobSchedule), s.Job.Slug)
 	if err != nil {
 		result <- err
@@ -135,11 +135,10 @@ func (s *Schedule) Failed() error {
 	return nil
 }
 
-func (s *Schedule) Finished() {
-	s.Status = Finished // is job really finished if it's cyclic?
-
+func (s *Schedule) Succeed() {
 	if s.Frequency == string(Once) {
 		s.NextExecutionDate = nil
+		s.Status = Succeed
 		return
 	}
 
@@ -147,8 +146,10 @@ func (s *Schedule) Finished() {
 	nextExec := sch.Next(time.Now().Round(time.Second))
 	if nextExec != (time.Time{}) {
 		s.NextExecutionDate = &nextExec
+		s.Status = Waiting
 		return
 	}
 
+	// TODO: can this even happed?
 	s.NextExecutionDate = nil
 }

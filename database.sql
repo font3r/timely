@@ -6,10 +6,11 @@
     CONNECTION LIMIT = -1;
 
 --
+DROP TABLE job_runs;
 DROP TABLE jobs;
-DROP TABLE job_schedule;
+DROP TABLE schedules;
 
-CREATE TABLE IF NOT EXISTS job_schedule
+CREATE TABLE IF NOT EXISTS schedules
 (
     id UUID NOT NULL PRIMARY KEY,
     description CHARACTER VARYING(1024),
@@ -26,18 +27,17 @@ CREATE TABLE IF NOT EXISTS job_schedule
 CREATE TABLE IF NOT EXISTS jobs
 (
     id UUID NOT NULL PRIMARY KEY,
-    schedule_id UUID NOT NULL REFERENCES job_schedule(id),
+    schedule_id UUID NOT NULL REFERENCES schedules(id),
     slug CHARACTER VARYING(256) NOT NULL,
     data TEXT
 );
 
-CREATE TABLE IF NOT EXISTS job_history
+CREATE TABLE IF NOT EXISTS job_runs
 (
     id UUID NOT NULL PRIMARY KEY,
-    job_id UUID NOT NULL REFERENCES jobs(id),
-    schedule_id UUID NOT NULL REFERENCES job_schedule(id),
+    schedule_id UUID NOT NULL REFERENCES schedules(id),
     status CHARACTER VARYING(128) NOT NULL,
     reason CHARACTER VARYING(1024),
-    attempt INT NOT NUll,
-    execution_date TIMESTAMP WITH TIME ZONE
+    start_date TIMESTAMP WITH TIME ZONE NOT NULL,
+    end_date TIMESTAMP WITH TIME ZONE
 );

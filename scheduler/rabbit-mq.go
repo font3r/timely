@@ -12,7 +12,7 @@ import (
 	log "timely/logger"
 )
 
-type TransportDriver interface {
+type AsyncTransportDriver interface {
 	Publish(exchange, routingKey string, message any) error
 	Subscribe(queue string, handle func(message []byte) error) error
 	CreateQueue(queue string) error

@@ -12,7 +12,7 @@ import (
 type Scheduler struct {
 	Id        uuid.UUID
 	Storage   StorageDriver
-	Transport TransportDriver
+	Transport AsyncTransportDriver
 }
 
 type JobStatusEvent struct {
@@ -34,7 +34,7 @@ var (
 		Msg:  "fetch failed schedules failed"}
 )
 
-func Start(ctx context.Context, storage StorageDriver, transport TransportDriver) *Scheduler {
+func Start(ctx context.Context, storage StorageDriver, transport AsyncTransportDriver) *Scheduler {
 	schedulerId := uuid.New()
 	scheduler := Scheduler{
 		Id:        schedulerId,
@@ -50,7 +50,7 @@ func Start(ctx context.Context, storage StorageDriver, transport TransportDriver
 		return nil
 	}
 
-	go func(storage StorageDriver, transport TransportDriver) {
+	go func(storage StorageDriver, transport AsyncTransportDriver) {
 		tickResult := make(chan error)
 
 		for {
@@ -70,7 +70,7 @@ func Start(ctx context.Context, storage StorageDriver, transport TransportDriver
 	return &scheduler
 }
 
-func createTransportDependencies(transport TransportDriver) error {
+func createTransportDependencies(transport AsyncTransportDriver) error {
 	err := transport.CreateExchange(string(ExchangeJobSchedule))
 	if err != nil {
 		return nil
@@ -95,7 +95,7 @@ func createTransportDependencies(transport TransportDriver) error {
 	return nil
 }
 
-func processTick(ctx context.Context, storage StorageDriver, transport TransportDriver, tickResult chan<- error) {
+func processTick(ctx context.Context, storage StorageDriver, transport AsyncTransportDriver, tickResult chan<- error) {
 	schedules, err := getSchedulesReadyToStart(ctx, storage)
 	if err != nil {
 		tickResult <- err
@@ -118,12 +118,20 @@ func processTick(ctx context.Context, storage StorageDriver, transport Transport
 			tickResult <- err
 			return
 		}
+
+		// TODO: this should be transactional so outbox is most likely needed
+		err = storage.AddJobRun(ctx, NewJobRun(schedule.Id))
+		if err != nil {
+			log.Logger.Printf("error adding job run - %v\n", err)
+			tickResult <- err
+			return
+		}
 	}
 
 	tickResult <- nil
 }
 
-func processJobEvents(ctx context.Context, storage StorageDriver, transport TransportDriver) {
+func processJobEvents(ctx context.Context, storage StorageDriver, transport AsyncTransportDriver) {
 	err := transport.Subscribe(string(QueueJobStatus), func(message []byte) error {
 		return handleJobEvent(ctx, message, storage)
 	})
@@ -157,14 +165,15 @@ func handleJobEvent(ctx context.Context, message []byte, storage StorageDriver) 
 
 	log.Logger.Printf("received job status %+v\n", jobStatus)
 	switch jobStatus.Status {
-	case string(Processing):
-		schedule.Status = Processing
-	case string(Failed):
+	// TODO: handle job not started within X time
+	//case string(JobProcessing):
+	//	schedule.Status = JobProcessing
+	case string(JobFailed):
 		if err = schedule.Failed(); err != nil {
 			return err
 		}
-	case string(Finished):
-		schedule.Finished() // TODO: after one time schedules we have to clean transport
+	case string(JobSucceed):
+		schedule.Succeed() // TODO: after one time schedules we have to clean transport
 	}
 
 	err = storage.UpdateSchedule(ctx, schedule)
@@ -176,7 +185,7 @@ func handleJobEvent(ctx context.Context, message []byte, storage StorageDriver) 
 }
 
 func getSchedulesReadyToStart(ctx context.Context, storage StorageDriver) ([]*Schedule, error) {
-	readySchedules, err := storage.GetSchedulesWithStatus(ctx, New)
+	readySchedules, err := storage.GetSchedulesWithStatus(ctx, Waiting)
 	if err != nil {
 		return nil, ErrFetchNewSchedules
 	}

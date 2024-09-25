@@ -19,6 +19,8 @@ type StorageDriver interface {
 	Add(ctx context.Context, schedule Schedule) error
 	DeleteScheduleById(ctx context.Context, id uuid.UUID) error
 	UpdateSchedule(ctx context.Context, schedule *Schedule) error
+	AddJobRun(ctx context.Context, jobRun JobRun) error
+	UpdateJobRun(ctx context.Context, jobRun JobRun) error
 }
 
 type Pgsql struct {
@@ -43,7 +45,7 @@ func (pg Pgsql) GetScheduleById(ctx context.Context, id uuid.UUID) (*Schedule, e
 	sql := `SELECT js.id, js.description, js.status, js.attempt, js.frequency, js.retry_policy_strategy, js.retry_policy_count, 
 				js.retry_policy_interval, js.last_execution_date, js.next_execution_date, j.id, j.slug, j.data
 			FROM jobs AS j 
-			JOIN job_schedule AS js ON js.id = j.schedule_id
+			JOIN schedules AS js ON js.id = j.schedule_id
 			WHERE js.id = $1`
 
 	var jobData string
@@ -73,7 +75,7 @@ func (pg Pgsql) GetSchedulesWithStatus(ctx context.Context, status ScheduleStatu
 	sql := `SELECT js.id, js.description, js.status, js.attempt, js.frequency, js.retry_policy_strategy, js.retry_policy_count, 
 				js.retry_policy_interval, js.last_execution_date, js.next_execution_date, j.id, j.slug, j.data
 			FROM jobs AS j 
-			JOIN job_schedule AS js ON js.id = j.schedule_id
+			JOIN schedules AS js ON js.id = j.schedule_id
 			WHERE status = $1 AND next_execution_date <= $2`
 
 	rows, err := pg.pool.Query(ctx, sql, status, time.Now())
@@ -112,10 +114,10 @@ func (pg Pgsql) GetSchedulesReadyToReschedule(ctx context.Context) ([]*Schedule,
 	sql := `SELECT js.id, js.description, js.status, js.attempt, js.frequency, js.retry_policy_strategy, js.retry_policy_count, 
 				js.retry_policy_interval, js.last_execution_date, js.next_execution_date, j.id, j.slug, j.data
 			FROM jobs AS j 
-			JOIN job_schedule AS js ON js.id = j.schedule_id
+			JOIN schedules AS js ON js.id = j.schedule_id
 			WHERE (status = $1 OR status = $2) AND next_execution_date <= $3`
 
-	rows, err := pg.pool.Query(ctx, sql, Failed, Finished, time.Now())
+	rows, err := pg.pool.Query(ctx, sql, Failed, Succeed, time.Now())
 
 	if err != nil {
 		return nil, err
@@ -151,7 +153,7 @@ func (pg Pgsql) GetAll(ctx context.Context) ([]*Schedule, error) {
 	sql := `SELECT js.id, js.description, js.status, js.attempt, js.frequency, js.retry_policy_strategy, js.retry_policy_count, 
 				js.retry_policy_interval, js.last_execution_date, js.next_execution_date, j.id, j.slug, j.data
 			FROM jobs AS j 
-			JOIN job_schedule AS js ON js.id = j.schedule_id`
+			JOIN schedules AS js ON js.id = j.schedule_id`
 
 	rows, err := pg.pool.Query(ctx, sql)
 
@@ -194,7 +196,7 @@ func (pg Pgsql) Add(ctx context.Context, schedule Schedule) error {
 	}
 
 	_, err = tx.Exec(ctx,
-		"INSERT INTO job_schedule VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
+		"INSERT INTO schedules VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
 		schedule.Id, schedule.Description, schedule.Status, schedule.Frequency, schedule.Attempt, schedule.RetryPolicy.Strategy,
 		schedule.RetryPolicy.Count, schedule.RetryPolicy.Interval, schedule.LastExecutionDate, schedule.NextExecutionDate)
 
@@ -244,7 +246,7 @@ func (pg Pgsql) DeleteScheduleById(ctx context.Context, id uuid.UUID) error {
 		return err
 	}
 
-	_, err = tx.Exec(ctx, `DELETE FROM job_schedule WHERE id = $1`, id)
+	_, err = tx.Exec(ctx, `DELETE FROM schedules WHERE id = $1`, id)
 	if err != nil {
 		if txErr := tx.Rollback(ctx); txErr != nil {
 			return txErr
@@ -261,11 +263,35 @@ func (pg Pgsql) DeleteScheduleById(ctx context.Context, id uuid.UUID) error {
 }
 
 func (pg Pgsql) UpdateSchedule(ctx context.Context, schedule *Schedule) error {
-	sql := `UPDATE job_schedule SET last_execution_date = $1, next_execution_date = $2, attempt = $3, status = $4 WHERE id = $5`
+	sql := `UPDATE schedules SET last_execution_date = $1, next_execution_date = $2, attempt = $3, 
+			status = $4 WHERE id = $5`
 
 	_, err := pg.pool.Exec(ctx, sql,
 		schedule.LastExecutionDate, schedule.NextExecutionDate, schedule.Attempt, schedule.Status, schedule.Id)
 
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (pg Pgsql) AddJobRun(ctx context.Context, jobRun JobRun) error {
+	sql := `INSERT INTO job_runs VALUES ($1, $2, $3, $4, $5, $6)`
+
+	_, err := pg.pool.Exec(ctx, sql, jobRun.Id, jobRun.ScheduleId, jobRun.Status, jobRun.Reason,
+		jobRun.StartDate, jobRun.EndDate)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (pg Pgsql) UpdateJobRun(ctx context.Context, jobRun JobRun) error {
+	sql := `UPDATE job_runs SET status = $1, reason = $2, end_date = $3 WHERE id = $4`
+
+	_, err := pg.pool.Exec(ctx, sql, jobRun.Status, jobRun.Reason, jobRun.EndDate, jobRun.Id)
 	if err != nil {
 		return err
 	}
