@@ -40,3 +40,16 @@ func NewJobRun(scheduleId uuid.UUID) JobRun {
 		EndDate:    nil,
 	}
 }
+
+func (jr *JobRun) Succeed() {
+	jr.Status = JobSucceed
+	end := time.Now().Round(time.Second)
+	jr.EndDate = &end
+}
+
+func (jr *JobRun) Failed(reason string) {
+	jr.Status = JobFailed
+	jr.Reason = &reason
+	end := time.Now().Round(time.Second)
+	jr.EndDate = &end
+}

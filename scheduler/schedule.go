@@ -31,6 +31,7 @@ type Schedule struct {
 
 type ScheduleJobEvent struct {
 	ScheduleId uuid.UUID       `json:"schedule_id"`
+	JobRunId   uuid.UUID       `json:"job_run_id"`
 	Job        string          `json:"job"`
 	Data       *map[string]any `json:"data"`
 }
@@ -72,7 +73,7 @@ func getFirstExecution(frequency string, scheduleStart *time.Time) time.Time {
 	return sch.Next(time.Now().Round(time.Second))
 }
 
-func (s *Schedule) Start(transport AsyncTransportDriver, result chan<- error) {
+func (s *Schedule) Start(runId uuid.UUID, transport AsyncTransportDriver, result chan<- error) {
 	err := transport.BindQueue(s.Job.Slug, string(ExchangeJobSchedule), s.Job.Slug)
 	if err != nil {
 		result <- err
@@ -82,6 +83,7 @@ func (s *Schedule) Start(transport AsyncTransportDriver, result chan<- error) {
 	err = transport.Publish(string(ExchangeJobSchedule), s.Job.Slug,
 		ScheduleJobEvent{
 			ScheduleId: s.Id,
+			JobRunId:   runId,
 			Job:        s.Job.Slug,
 			Data:       s.Job.Data,
 		})
@@ -99,7 +101,7 @@ func (s *Schedule) Start(transport AsyncTransportDriver, result chan<- error) {
 	now := time.Now().Round(time.Second)
 	s.LastExecutionDate = &now
 
-	log.Logger.Printf("scheduled job %s/%s", s.Job.Id, s.Job.Slug)
+	log.Logger.Printf("scheduled job %s/%s, run %s", s.Job.Id, s.Job.Slug, runId)
 	result <- nil
 }
 

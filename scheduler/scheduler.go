@@ -17,6 +17,7 @@ type Scheduler struct {
 
 type JobStatusEvent struct {
 	ScheduleId uuid.UUID `json:"schedule_id"`
+	JobRunId   uuid.UUID `json:"job_run_id"`
 	JobSlug    string    `json:"job_slug"`
 	Status     string    `json:"status"`
 	Reason     string    `json:"reason"`
@@ -26,6 +27,9 @@ var (
 	ErrReceivedStatusForUnknownSchedule = &Error{
 		Code: "UNKNOWN_SCHEDULE",
 		Msg:  "received status for unknown schedule"}
+	ErrReceivedStatusForUnknownJobRun = &Error{
+		Code: "UNKNOWN_JOB_RUN",
+		Msg:  "received status for unknown job run"}
 	ErrFetchNewSchedules = &Error{
 		Code: "FETCH_NEW_SCHEDULES_ERROR",
 		Msg:  "fetch new schedules failed"}
@@ -104,7 +108,19 @@ func processTick(ctx context.Context, storage StorageDriver, transport AsyncTran
 
 	for _, schedule := range schedules {
 		scheduleResult := make(chan error)
-		go schedule.Start(transport, scheduleResult)
+		jobRun := NewJobRun(schedule.Id)
+
+		// TODO: this should be transactional so outbox is most likely needed
+
+		// Job run has to be created before starting job because be can hit race condition with job statuses
+		err = storage.AddJobRun(ctx, jobRun)
+		if err != nil {
+			log.Logger.Printf("error adding job run - %v\n", err)
+			tickResult <- err
+			return
+		}
+
+		go schedule.Start(jobRun.Id, transport, scheduleResult)
 
 		scheduleStartError := <-scheduleResult
 		if scheduleStartError != nil {
@@ -112,17 +128,9 @@ func processTick(ctx context.Context, storage StorageDriver, transport AsyncTran
 			return
 		}
 
-		err = storage.UpdateSchedule(ctx, schedule)
+		err = storage.UpdateSchedule(ctx, *schedule)
 		if err != nil {
 			log.Logger.Printf("error updating schedule status - %v\n", err)
-			tickResult <- err
-			return
-		}
-
-		// TODO: this should be transactional so outbox is most likely needed
-		err = storage.AddJobRun(ctx, NewJobRun(schedule.Id))
-		if err != nil {
-			log.Logger.Printf("error adding job run - %v\n", err)
 			tickResult <- err
 			return
 		}
@@ -149,6 +157,8 @@ func handleJobEvent(ctx context.Context, message []byte, storage StorageDriver) 
 		return err
 	}
 
+	log.Logger.Printf("received status %+v", jobStatus)
+
 	schedule, err := storage.GetScheduleById(ctx, jobStatus.ScheduleId)
 	if err != nil {
 		return err
@@ -158,25 +168,43 @@ func handleJobEvent(ctx context.Context, message []byte, storage StorageDriver) 
 		return ErrReceivedStatusForUnknownSchedule
 	}
 
+	// TODO: at this point we can detect if we received status for stale job
+	jobRun, err := storage.GetJobRun(ctx, jobStatus.JobRunId)
+	if err != nil {
+		return err
+	}
+
+	if jobRun == nil {
+		return ErrReceivedStatusForUnknownJobRun
+	}
+
 	if schedule.LastExecutionDate == nil {
 		now := time.Now().Round(time.Second)
 		schedule.LastExecutionDate = &now
 	}
 
-	log.Logger.Printf("received job status %+v\n", jobStatus)
 	switch jobStatus.Status {
 	// TODO: handle job not started within X time
-	//case string(JobProcessing):
-	//	schedule.Status = JobProcessing
+	case string(JobProcessing):
+		jobRun.Status = JobProcessing
 	case string(JobFailed):
-		if err = schedule.Failed(); err != nil {
-			return err
+		{
+			jobRun.Failed(jobStatus.Reason)
+			if err = schedule.Failed(); err != nil {
+				return err
+			}
 		}
 	case string(JobSucceed):
+		jobRun.Succeed()
 		schedule.Succeed() // TODO: after one time schedules we have to clean transport
 	}
 
-	err = storage.UpdateSchedule(ctx, schedule)
+	err = storage.UpdateJobRun(ctx, *jobRun)
+	if err != nil {
+		return err
+	}
+
+	err = storage.UpdateSchedule(ctx, *schedule)
 	if err != nil {
 		return err
 	}
