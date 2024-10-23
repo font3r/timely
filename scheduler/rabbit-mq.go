@@ -8,8 +8,9 @@ import (
 	"strings"
 	"time"
 
-	amqp "github.com/rabbitmq/amqp091-go"
 	log "timely/logger"
+
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type AsyncTransportDriver interface {
@@ -86,21 +87,24 @@ func (t *Transport) Subscribe(queue string, handle func(message []byte) error) e
 	}
 
 	for {
-		rawMessage := <-delivery
-		err = handle(rawMessage.Body)
-		if err != nil {
-			log.Logger.Printf("error during consumer processing - %v\n", err)
+		// TODO: probably it would be safer to limit number of goroutines
+		go func(delivery amqp.Delivery, handle func(message []byte) error) {
+			err := handle(delivery.Body)
 
-			err = rawMessage.Nack(false, false)
 			if err != nil {
-				return err
+				log.Logger.Printf("error during consumer processing - %v\n", err)
+
+				err = delivery.Nack(false, false)
+				if err != nil {
+					log.Logger.Printf("error during nack - %v\n", err)
+				}
+			} else {
+				err = delivery.Ack(false)
+				if err != nil {
+					log.Logger.Printf("error during ack - %v\n", err)
+				}
 			}
-		} else {
-			err = rawMessage.Ack(false)
-			if err != nil {
-				return err
-			}
-		}
+		}(<-delivery, handle)
 	}
 }
 
