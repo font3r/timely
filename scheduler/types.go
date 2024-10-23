@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"fmt"
+
 	"github.com/robfig/cron/v3"
 )
 
@@ -19,7 +20,7 @@ const (
 
 const Once PredefinedFrequency = "once"
 
-var CronParser = cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+var CronParser = cron.NewParser(cron.Second | cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 
 const (
 	ContentTypeHeader        = "Content-Type"

@@ -177,11 +177,6 @@ func handleJobEvent(ctx context.Context, message []byte, storage StorageDriver) 
 		return ErrReceivedStatusForUnknownJobRun
 	}
 
-	if schedule.LastExecutionDate == nil {
-		now := time.Now().Round(time.Second)
-		schedule.LastExecutionDate = &now
-	}
-
 	switch jobStatus.Status {
 	// TODO: handle job not started within X time
 	case string(JobProcessing):

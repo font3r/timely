@@ -74,8 +74,8 @@ func Start() {
 func processMockJob(tra *scheduler.Transport, scheduleId, jobRunId uuid.UUID, jobSlug string) error {
 	var seq int16 = 0
 
-	for i := 0; i < 10; i++ {
-		if rand.Intn(10) < 10 { // random 10% failure rate for testing
+	for i := 0; i < 5; i++ {
+		if rand.Intn(10) < 0 { // random 10% failure rate for testing
 			err := tra.Publish(string(scheduler.ExchangeJobStatus),
 				string(scheduler.RoutingKeyJobStatus), JobStatusEvent{
 					ScheduleId: scheduleId,
@@ -113,7 +113,7 @@ func processMockJob(tra *scheduler.Transport, scheduleId, jobRunId uuid.UUID, jo
 			ScheduleId: scheduleId,
 			JobRunId:   jobRunId,
 			JobSlug:    jobSlug,
-			Status:     "finished",
+			Status:     "succeed",
 			Reason:     "success",
 		})
 

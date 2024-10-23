@@ -5,7 +5,6 @@ import (
 	log "timely/logger"
 
 	"github.com/google/uuid"
-	"github.com/robfig/cron/v3"
 )
 
 type ScheduleStatus string
@@ -67,8 +66,7 @@ func getFirstExecution(frequency string, scheduleStart *time.Time) time.Time {
 		return time.Now().Round(time.Second)
 	}
 
-	specParser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
-	sch, _ := specParser.Parse(frequency)
+	sch, _ := CronParser.Parse(frequency)
 
 	return sch.Next(time.Now().Round(time.Second))
 }
@@ -146,12 +144,7 @@ func (s *Schedule) Succeed() {
 
 	sch, _ := CronParser.Parse(s.Frequency)
 	nextExec := sch.Next(time.Now().Round(time.Second))
-	if nextExec != (time.Time{}) {
-		s.NextExecutionDate = &nextExec
-		s.Status = Waiting
-		return
-	}
 
-	// TODO: can this even happed?
-	s.NextExecutionDate = nil
+	s.NextExecutionDate = &nextExec
+	s.Status = Waiting
 }
