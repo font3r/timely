@@ -3,13 +3,14 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 	"net/http"
 	"time"
 	"timely/commands"
 	"timely/queries"
 	"timely/scheduler"
+
+	"github.com/google/uuid"
+	"github.com/gorilla/mux"
 )
 
 func registerRoutes(router *mux.Router, app *Application) {

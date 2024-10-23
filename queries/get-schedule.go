@@ -41,7 +41,7 @@ type JobDto struct {
 }
 
 var (
-	ErrScheduleNotFound = &scheduler.Error{
+	ErrScheduleNotFound = scheduler.Error{
 		Code: "SCHEDULE_NOT_FOUND",
 		Msg:  "schedule not found",
 	}

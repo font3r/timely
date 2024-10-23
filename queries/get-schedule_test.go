@@ -45,12 +45,12 @@ func TestGetSchedule(t *testing.T) {
 }
 
 type dependencies struct {
-	storageDriver *storageDriverMock
+	storageDriver *storageDriverFake
 	handler       GetScheduleHandler
 }
 
 func getDeps() dependencies {
-	storageDriver := &storageDriverMock{
+	storageDriver := &storageDriverFake{
 		Schedules: []scheduler.Schedule{
 			{
 				Id:                uuid.UUID{},
@@ -72,11 +72,11 @@ func getDeps() dependencies {
 	}
 }
 
-type storageDriverMock struct {
+type storageDriverFake struct {
 	Schedules []scheduler.Schedule
 }
 
-func (s storageDriverMock) GetScheduleById(ctx context.Context, id uuid.UUID) (*scheduler.Schedule, error) {
+func (s storageDriverFake) GetScheduleById(ctx context.Context, id uuid.UUID) (*scheduler.Schedule, error) {
 	if id == uuid.Nil {
 		return nil, errors.New("storage error")
 	}
@@ -84,38 +84,42 @@ func (s storageDriverMock) GetScheduleById(ctx context.Context, id uuid.UUID) (*
 	return &scheduler.Schedule{}, ErrScheduleNotFound
 }
 
-func (s storageDriverMock) GetScheduleByJobSlug(ctx context.Context, slug string) (*scheduler.Schedule, error) {
+func (s storageDriverFake) GetScheduleByJobSlug(ctx context.Context, slug string) (*scheduler.Schedule, error) {
 	panic("implement me")
 }
 
-func (s storageDriverMock) GetSchedulesWithStatus(ctx context.Context, status scheduler.ScheduleStatus) ([]*scheduler.Schedule, error) {
+func (s storageDriverFake) GetSchedulesWithStatus(ctx context.Context, status scheduler.ScheduleStatus) ([]*scheduler.Schedule, error) {
 	panic("implement me")
 }
 
-func (s storageDriverMock) GetSchedulesReadyToReschedule(ctx context.Context) ([]*scheduler.Schedule, error) {
+func (s storageDriverFake) GetSchedulesReadyToReschedule(ctx context.Context) ([]*scheduler.Schedule, error) {
 	panic("implement me")
 }
 
-func (s storageDriverMock) GetAll(ctx context.Context) ([]*scheduler.Schedule, error) {
+func (s storageDriverFake) GetAll(ctx context.Context) ([]*scheduler.Schedule, error) {
 	panic("implement me")
 }
 
-func (s storageDriverMock) Add(ctx context.Context, schedule scheduler.Schedule) error {
+func (s storageDriverFake) Add(ctx context.Context, schedule scheduler.Schedule) error {
 	panic("implement me")
 }
 
-func (s storageDriverMock) DeleteScheduleById(ctx context.Context, id uuid.UUID) error {
+func (s storageDriverFake) DeleteScheduleById(ctx context.Context, id uuid.UUID) error {
 	panic("implement me")
 }
 
-func (s storageDriverMock) UpdateSchedule(ctx context.Context, schedule *scheduler.Schedule) error {
+func (s storageDriverFake) UpdateSchedule(ctx context.Context, schedule scheduler.Schedule) error {
 	panic("implement me")
 }
 
-func (s storageDriverMock) AddJobRun(ctx context.Context, jonRun scheduler.JobRun) error {
+func (s storageDriverFake) AddJobRun(ctx context.Context, jobRun scheduler.JobRun) error {
 	panic("implement me")
 }
 
-func (s storageDriverMock) UpdateJobRun(ctx context.Context, jonRun scheduler.JobRun) error {
+func (s storageDriverFake) UpdateJobRun(ctx context.Context, jobRun scheduler.JobRun) error {
+	panic("implement me")
+}
+
+func (s storageDriverFake) GetJobRun(ctx context.Context, id uuid.UUID) (*scheduler.JobRun, error) {
 	panic("implement me")
 }

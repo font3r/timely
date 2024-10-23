@@ -111,8 +111,7 @@ func processTick(ctx context.Context, storage StorageDriver, transport AsyncTran
 		jobRun := NewJobRun(schedule.Id)
 
 		// TODO: this should be transactional so outbox is most likely needed
-
-		// Job run has to be created before starting job because be can hit race condition with job statuses
+		// Job run has to be created before starting job because we can hit race condition with job statuses
 		err = storage.AddJobRun(ctx, jobRun)
 		if err != nil {
 			log.Logger.Printf("error adding job run - %v\n", err)
