@@ -16,7 +16,7 @@ type GetScheduleHandler struct {
 	Storage scheduler.StorageDriver
 }
 
-type ScheduleDto struct {
+type ScheduleDetailsDto struct {
 	Id                uuid.UUID                `json:"id"`
 	Description       string                   `json:"description"`
 	Frequency         string                   `json:"frequency"`
@@ -25,8 +25,9 @@ type ScheduleDto struct {
 	RetryPolicy       *RetryPolicyDto          `json:"retry_policy"`
 	LastExecutionDate *time.Time               `json:"last_execution_date"`
 	NextExecutionDate *time.Time               `json:"next_execution_date"`
-	Job               JobDto                   `json:"job"`
+	Job               ScheduleDetailsJobDto    `json:"job"`
 	Configuration     ScheduleConfigurationDto `json:"configuration"`
+	JobRuns           []JobRunDto              `json:"job_runs"`
 }
 
 type RetryPolicyDto struct {
@@ -35,10 +36,17 @@ type RetryPolicyDto struct {
 	Interval string                 `json:"interval"`
 }
 
-type JobDto struct {
+type ScheduleDetailsJobDto struct {
 	Id   uuid.UUID       `json:"id"`
 	Slug string          `json:"slug"`
 	Data *map[string]any `json:"data"`
+}
+
+type JobRunDto struct {
+	Status    scheduler.JobRunStatus `json:"status"`
+	Reason    *string                `json:"reason"`
+	StartDate time.Time              `json:"start_date"`
+	EndDate   *time.Time             `json:"end_date"`
 }
 
 type ScheduleConfigurationDto struct {
@@ -53,14 +61,19 @@ var (
 	}
 )
 
-func (h GetScheduleHandler) Handle(ctx context.Context, q GetSchedule) (ScheduleDto, error) {
+func (h GetScheduleHandler) Handle(ctx context.Context, q GetSchedule) (ScheduleDetailsDto, error) {
 	schedule, err := h.Storage.GetScheduleById(ctx, q.ScheduleId)
 	if err != nil {
-		return ScheduleDto{}, err
+		return ScheduleDetailsDto{}, err
 	}
 
 	if schedule == nil {
-		return ScheduleDto{}, ErrScheduleNotFound
+		return ScheduleDetailsDto{}, ErrScheduleNotFound
+	}
+
+	jobRuns, err := h.Storage.GetJobRuns(ctx, schedule.Id)
+	if err != nil {
+		return ScheduleDetailsDto{}, err
 	}
 
 	var retry *RetryPolicyDto
@@ -72,7 +85,17 @@ func (h GetScheduleHandler) Handle(ctx context.Context, q GetSchedule) (Schedule
 		}
 	}
 
-	return ScheduleDto{
+	jobRunsDto := make([]JobRunDto, 0)
+	for _, jobRun := range jobRuns {
+		jobRunsDto = append(jobRunsDto, JobRunDto{
+			Status:    jobRun.Status,
+			Reason:    jobRun.Reason,
+			StartDate: jobRun.StartDate,
+			EndDate:   jobRun.EndDate,
+		})
+	}
+
+	return ScheduleDetailsDto{
 		Id:                schedule.Id,
 		Description:       schedule.Description,
 		Frequency:         schedule.Frequency,
@@ -81,7 +104,7 @@ func (h GetScheduleHandler) Handle(ctx context.Context, q GetSchedule) (Schedule
 		RetryPolicy:       retry,
 		LastExecutionDate: schedule.LastExecutionDate,
 		NextExecutionDate: schedule.NextExecutionDate,
-		Job: JobDto{
+		Job: ScheduleDetailsJobDto{
 			Id:   schedule.Job.Id,
 			Slug: schedule.Job.Slug,
 			Data: schedule.Job.Data,
@@ -90,5 +113,6 @@ func (h GetScheduleHandler) Handle(ctx context.Context, q GetSchedule) (Schedule
 			TransportType: schedule.Configuration.TransportType,
 			Url:           schedule.Configuration.Url,
 		},
+		JobRuns: jobRunsDto,
 	}, nil
 }

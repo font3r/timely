@@ -1,5 +1,5 @@
 @baseAddress = http://localhost:5000
-@scheduleId = 65790182-5f24-4779-9c12-cf738ef7ca79
+@scheduleId = 6beda73c-1d6c-4198-a408-033cb27c6abd
 
 ### Get schedule
 GET {{baseAddress}}/api/v1/schedules/{{scheduleId}}

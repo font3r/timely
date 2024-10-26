@@ -21,6 +21,7 @@ type StorageDriver interface {
 	UpdateSchedule(ctx context.Context, schedule Schedule) error
 	AddJobRun(ctx context.Context, jobRun JobRun) error
 	GetJobRun(ctx context.Context, id uuid.UUID) (*JobRun, error)
+	GetJobRuns(ctx context.Context, scheduleId uuid.UUID) ([]*JobRun, error)
 	UpdateJobRun(ctx context.Context, jobRun JobRun) error
 }
 
@@ -311,6 +312,28 @@ func (pg Pgsql) GetJobRun(ctx context.Context, id uuid.UUID) (*JobRun, error) {
 	}
 
 	return &jobRun, nil
+}
+
+func (pg Pgsql) GetJobRuns(ctx context.Context, scheduleId uuid.UUID) ([]*JobRun, error) {
+	sql := `SELECT id, schedule_id, status, reason, start_date, end_date FROM job_runs WHERE schedule_id = $1`
+
+	rows, err := pg.pool.Query(ctx, sql, scheduleId)
+	if err != nil {
+		return nil, err
+	}
+
+	jobRuns := make([]*JobRun, 0)
+	for rows.Next() {
+		var jobRun = JobRun{}
+
+		err = rows.Scan(&jobRun.Id, &jobRun.ScheduleId, &jobRun.Status, &jobRun.Reason, &jobRun.StartDate, &jobRun.EndDate)
+		if err != nil {
+			return nil, err
+		}
+
+		jobRuns = append(jobRuns, &jobRun)
+	}
+	return jobRuns, nil
 }
 
 func (pg Pgsql) UpdateJobRun(ctx context.Context, jobRun JobRun) error {
