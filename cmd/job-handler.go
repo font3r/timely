@@ -1,17 +1,40 @@
-package test_job_handler
+package main
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/rand"
+	"net/http"
 	"time"
 	log "timely/logger"
 	"timely/scheduler"
 
 	"github.com/google/uuid"
-	"github.com/spf13/viper"
+	"github.com/gorilla/mux"
 )
+
+func main() {
+	r := mux.NewRouter()
+	srv := &http.Server{
+		Addr:    ":5001",
+		Handler: r,
+	}
+
+	v1 := r.PathPrefix("/api/v1").Subrouter()
+	v1.HandleFunc("/jobs/process-user-notifications", func(w http.ResponseWriter, r *http.Request) {
+		log.Logger.Println("received job start request")
+
+		w.WriteHeader(http.StatusAccepted)
+	}).Methods("POST")
+
+	Start()
+
+	log.Logger.Printf("listening on %v", srv.Addr)
+	if err := srv.ListenAndServe(); err != nil {
+		log.Logger.Println(err)
+	}
+}
 
 type JobStatusEvent struct {
 	ScheduleId uuid.UUID `json:"schedule_id"`
@@ -31,7 +54,7 @@ type ScheduleJobEvent struct {
 func Start() {
 	log.Logger.Println("starting ...")
 
-	tra, err := scheduler.NewRabbitMqTransportConnection(viper.GetString("transport.rabbitmq.connectionString"))
+	tra, err := scheduler.NewRabbitMqTransportConnection("amqp://guest:guest@localhost:5672")
 	if err != nil {
 		panic(fmt.Sprintf("test-app: create transport error - %s", err))
 	}

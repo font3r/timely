@@ -23,8 +23,7 @@ Content-Type: application/json
         }
     },
     "configuration": {
-        "transportType": "http",
-        "url": "https://localhost/api/v1/jobs/process-user-notifications"
+        "transportType": "rabbitmq"
     }
 }
 
@@ -49,7 +48,7 @@ Content-Type: application/json
     },
     "configuration": {
         "transportType": "http",
-        "url": "https://localhost/api/v1/jobs/process-user-notifications"
+        "url": "http://localhost:5001/api/v1/jobs/process-user-notifications"
     }
 }
 

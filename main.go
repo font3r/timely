@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	testjobhandler "timely/cmd"
 	log "timely/logger"
 	"timely/scheduler"
 
@@ -46,7 +45,6 @@ func main() {
 	}
 
 	registerRoutes(r, app)
-	go testjobhandler.Start()
 
 	log.Logger.Printf("listening on %v", srv.Addr)
 	if err := srv.ListenAndServe(); err != nil {
