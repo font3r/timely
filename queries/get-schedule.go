@@ -21,13 +21,12 @@ type ScheduleDetailsDto struct {
 	Description       string                   `json:"description"`
 	Frequency         string                   `json:"frequency"`
 	Status            scheduler.ScheduleStatus `json:"status"`
-	Attempt           int                      `json:"attempt"`
 	RetryPolicy       *RetryPolicyDto          `json:"retry_policy"`
 	LastExecutionDate *time.Time               `json:"last_execution_date"`
 	NextExecutionDate *time.Time               `json:"next_execution_date"`
 	Job               ScheduleDetailsJobDto    `json:"job"`
 	Configuration     ScheduleConfigurationDto `json:"configuration"`
-	JobRuns           []JobRunDto              `json:"job_runs"`
+	RecentJobRuns     []JobRunDto              `json:"recent_job_runs"`
 }
 
 type RetryPolicyDto struct {
@@ -44,6 +43,7 @@ type ScheduleDetailsJobDto struct {
 
 type JobRunDto struct {
 	Status    scheduler.JobRunStatus `json:"status"`
+	Attempt   int                    `json:"attempt"`
 	Reason    *string                `json:"reason"`
 	StartDate time.Time              `json:"start_date"`
 	EndDate   *time.Time             `json:"end_date"`
@@ -71,7 +71,7 @@ func (h GetScheduleHandler) Handle(ctx context.Context, q GetSchedule) (Schedule
 		return ScheduleDetailsDto{}, ErrScheduleNotFound
 	}
 
-	jobRuns, err := h.Storage.GetJobRuns(ctx, schedule.Id)
+	jobRuns, err := h.Storage.GetRecentJobRuns(ctx, schedule.Id)
 	if err != nil {
 		return ScheduleDetailsDto{}, err
 	}
@@ -85,10 +85,11 @@ func (h GetScheduleHandler) Handle(ctx context.Context, q GetSchedule) (Schedule
 		}
 	}
 
-	jobRunsDto := make([]JobRunDto, 0)
+	recentJobRunsDto := make([]JobRunDto, 0)
 	for _, jobRun := range jobRuns {
-		jobRunsDto = append(jobRunsDto, JobRunDto{
+		recentJobRunsDto = append(recentJobRunsDto, JobRunDto{
 			Status:    jobRun.Status,
+			Attempt:   jobRun.Attempt,
 			Reason:    jobRun.Reason,
 			StartDate: jobRun.StartDate,
 			EndDate:   jobRun.EndDate,
@@ -100,7 +101,6 @@ func (h GetScheduleHandler) Handle(ctx context.Context, q GetSchedule) (Schedule
 		Description:       schedule.Description,
 		Frequency:         schedule.Frequency,
 		Status:            schedule.Status,
-		Attempt:           schedule.Attempt,
 		RetryPolicy:       retry,
 		LastExecutionDate: schedule.LastExecutionDate,
 		NextExecutionDate: schedule.NextExecutionDate,
@@ -113,6 +113,6 @@ func (h GetScheduleHandler) Handle(ctx context.Context, q GetSchedule) (Schedule
 			TransportType: schedule.Configuration.TransportType,
 			Url:           schedule.Configuration.Url,
 		},
-		JobRuns: jobRunsDto,
+		RecentJobRuns: recentJobRunsDto,
 	}, nil
 }

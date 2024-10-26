@@ -247,7 +247,7 @@ func handleJobEvent(ctx context.Context, message []byte, storage StorageDriver) 
 	case string(JobFailed):
 		{
 			jobRun.Failed(jobStatus.Reason)
-			if err = schedule.Failed(); err != nil {
+			if err = schedule.Failed(jobRun.Attempt); err != nil {
 				return err
 			}
 		}

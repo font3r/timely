@@ -16,7 +16,6 @@ CREATE TABLE IF NOT EXISTS schedules
     description CHARACTER VARYING(1024),
     status CHARACTER VARYING(64) NOT NULL,
     frequency CHARACTER VARYING(256) NOT NULL,
-    attempt INT,
     retry_policy_strategy CHARACTER VARYING(32),
     retry_policy_count INT,
     retry_policy_interval CHARACTER VARYING(32),
@@ -39,6 +38,7 @@ CREATE TABLE IF NOT EXISTS job_runs
     id UUID NOT NULL PRIMARY KEY,
     schedule_id UUID NOT NULL REFERENCES schedules(id) ON DELETE CASCADE,
     status CHARACTER VARYING(128) NOT NULL,
+    attempt INT,
     reason CHARACTER VARYING(1024),
     start_date TIMESTAMP WITH TIME ZONE NOT NULL,
     end_date TIMESTAMP WITH TIME ZONE

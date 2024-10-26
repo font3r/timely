@@ -21,7 +21,6 @@ type Schedule struct {
 	Description       string
 	Frequency         string
 	Status            ScheduleStatus
-	Attempt           int
 	RetryPolicy       RetryPolicy
 	Configuration     ScheduleConfiguration
 	LastExecutionDate *time.Time
@@ -51,16 +50,11 @@ func NewSchedule(description, frequency, slug string, data *map[string]any,
 		Description:       description,
 		Frequency:         frequency,
 		Status:            Waiting,
-		Attempt:           0,
 		RetryPolicy:       policy,
 		LastExecutionDate: nil,
 		NextExecutionDate: &execution,
-		Job: &Job{
-			Id:   uuid.New(),
-			Slug: slug,
-			Data: data,
-		},
-		Configuration: configuration,
+		Job:               NewJob(slug, data),
+		Configuration:     configuration,
 	}
 }
 
@@ -79,14 +73,12 @@ func getFirstExecution(frequency string, scheduleStart *time.Time) time.Time {
 }
 
 func (s *Schedule) Start() {
-	s.Attempt++
 	s.Status = Scheduled
-
 	now := time.Now().Round(time.Second)
 	s.LastExecutionDate = &now
 }
 
-func (s *Schedule) Failed() error {
+func (s *Schedule) Failed(attempt int) error {
 	s.Status = Failed
 
 	if s.RetryPolicy == (RetryPolicy{}) {
@@ -98,9 +90,9 @@ func (s *Schedule) Failed() error {
 	var err error
 
 	if s.NextExecutionDate != nil {
-		next, err = s.RetryPolicy.GetNextExecutionTime(*s.NextExecutionDate, s.Attempt)
+		next, err = s.RetryPolicy.GetNextExecutionTime(*s.NextExecutionDate, attempt)
 	} else {
-		next, err = s.RetryPolicy.GetNextExecutionTime(time.Now(), s.Attempt)
+		next, err = s.RetryPolicy.GetNextExecutionTime(time.Now(), attempt)
 	}
 
 	if err != nil {

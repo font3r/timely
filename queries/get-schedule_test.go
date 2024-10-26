@@ -57,7 +57,6 @@ func getDeps() dependencies {
 				Description:       "",
 				Frequency:         "",
 				Status:            "",
-				Attempt:           0,
 				RetryPolicy:       scheduler.RetryPolicy{},
 				LastExecutionDate: nil,
 				NextExecutionDate: nil,
@@ -125,5 +124,9 @@ func (s storageDriverFake) GetJobRun(ctx context.Context, id uuid.UUID) (*schedu
 }
 
 func (s storageDriverFake) GetJobRuns(ctx context.Context, scheduleId uuid.UUID) ([]*scheduler.JobRun, error) {
+	panic("implement me")
+}
+
+func (s storageDriverFake) GetRecentJobRuns(ctx context.Context, scheduleId uuid.UUID) ([]*scheduler.JobRun, error) {
 	panic("implement me")
 }
