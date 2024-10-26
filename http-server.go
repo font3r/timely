@@ -33,7 +33,7 @@ func createSchedule(v1 *mux.Router, app *Application) {
 
 		h := commands.CreateScheduleHandler{
 			Storage:   app.Scheduler.Storage,
-			Transport: app.Scheduler.Transport,
+			Transport: app.Scheduler.AsyncTransport,
 		}
 
 		result, err := h.Handle(req.Context(), c)
@@ -85,6 +85,11 @@ func validateCreateSchedule(req *http.Request) (commands.CreateScheduleCommand, 
 
 	if comm.Job.Slug == "" {
 		err = errors.Join(errors.New("invalid job slug"))
+	}
+
+	// TODO: this would have to be validated against scheduler configurable available transports
+	if comm.TransportType != string(scheduler.Http) || comm.TransportType != string(scheduler.Rabbitmq) {
+		err = errors.Join(errors.New("invalid transport type"))
 	}
 
 	if err != nil {

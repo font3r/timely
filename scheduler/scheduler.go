@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"net/url"
 	"time"
 	log "timely/logger"
 
@@ -10,9 +11,10 @@ import (
 )
 
 type Scheduler struct {
-	Id        uuid.UUID
-	Storage   StorageDriver
-	Transport AsyncTransportDriver
+	Id             uuid.UUID
+	Storage        StorageDriver
+	AsyncTransport AsyncTransportDriver
+	SyncTransport  SyncTransportDriver
 }
 
 type JobStatusEvent struct {
@@ -21,6 +23,13 @@ type JobStatusEvent struct {
 	JobSlug    string    `json:"job_slug"`
 	Status     string    `json:"status"`
 	Reason     string    `json:"reason"`
+}
+
+type ScheduleJobEvent struct {
+	ScheduleId uuid.UUID       `json:"schedule_id"`
+	JobRunId   uuid.UUID       `json:"job_run_id"`
+	Job        string          `json:"job"`
+	Data       *map[string]any `json:"data"`
 }
 
 var (
@@ -38,27 +47,30 @@ var (
 		Msg:  "fetch failed schedules failed"}
 )
 
-func Start(ctx context.Context, storage StorageDriver, transport AsyncTransportDriver) *Scheduler {
+func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTransportDriver,
+	syncTransport SyncTransportDriver) *Scheduler {
+
 	schedulerId := uuid.New()
 	scheduler := Scheduler{
-		Id:        schedulerId,
-		Storage:   storage,
-		Transport: transport,
+		Id:             schedulerId,
+		Storage:        storage,
+		AsyncTransport: asyncTransport,
+		SyncTransport:  syncTransport,
 	}
 
 	log.Logger.Printf("starting scheduler with id %s\n", schedulerId)
 
-	err := createTransportDependencies(transport)
+	err := createAsyncTransportDependencies(asyncTransport)
 	if err != nil {
 		log.Logger.Printf("creating internal exchanges/queues error - %v", err)
 		return nil
 	}
 
-	go func(storage StorageDriver, transport AsyncTransportDriver) {
+	go func(storage StorageDriver, asyncTransport AsyncTransportDriver) {
 		tickResult := make(chan error)
 
 		for {
-			go processTick(ctx, storage, transport, tickResult)
+			go processTick(ctx, storage, asyncTransport, syncTransport, tickResult)
 
 			err = <-tickResult
 			if err != nil {
@@ -67,14 +79,14 @@ func Start(ctx context.Context, storage StorageDriver, transport AsyncTransportD
 
 			time.Sleep(time.Second)
 		}
-	}(storage, transport)
+	}(storage, asyncTransport)
 
-	go processJobEvents(ctx, storage, transport)
+	go processJobEvents(ctx, storage, asyncTransport)
 
 	return &scheduler
 }
 
-func createTransportDependencies(transport AsyncTransportDriver) error {
+func createAsyncTransportDependencies(transport AsyncTransportDriver) error {
 	err := transport.CreateExchange(string(ExchangeJobSchedule))
 	if err != nil {
 		return nil
@@ -99,7 +111,9 @@ func createTransportDependencies(transport AsyncTransportDriver) error {
 	return nil
 }
 
-func processTick(ctx context.Context, storage StorageDriver, transport AsyncTransportDriver, tickResult chan<- error) {
+func processTick(ctx context.Context, storage StorageDriver, asyncTransport AsyncTransportDriver,
+	syncTransport SyncTransportDriver, tickResult chan<- error) {
+
 	schedules, err := getSchedulesReadyToStart(ctx, storage)
 	if err != nil {
 		tickResult <- err
@@ -107,23 +121,51 @@ func processTick(ctx context.Context, storage StorageDriver, transport AsyncTran
 	}
 
 	for _, schedule := range schedules {
-		scheduleResult := make(chan error)
 		jobRun := NewJobRun(schedule.Id)
 
-		// TODO: this should be transactional so outbox is most likely needed
+		// TODO: starting schedule should be transactional so outbox is most likely needed for async transport
 		// Job run has to be created before starting job because we can hit race condition with job statuses
-		err = storage.AddJobRun(ctx, jobRun)
-		if err != nil {
-			log.Logger.Printf("error adding job run - %v\n", err)
-			tickResult <- err
-			return
+		// err = storage.AddJobRun(ctx, jobRun)
+		// if err != nil {
+		// 	log.Logger.Printf("error adding job run - %v\n", err)
+		// 	tickResult <- err
+		// 	return
+		// }
+
+		schedule.Start()
+
+		switch schedule.Configuration.TransportType {
+		case Http:
+			{
+				err = syncTransport.Start(ctx, schedule.Configuration.Url.String(),
+					ScheduleJobRequest{
+						ScheduleId: schedule.Id,
+						JobRunId:   jobRun.Id,
+						Job:        schedule.Job.Slug,
+						Data:       schedule.Job.Data,
+					})
+			}
+		case Rabbitmq:
+			{
+				err = asyncTransport.BindQueue(schedule.Job.Slug, string(ExchangeJobSchedule), schedule.Job.Slug)
+				if err != nil {
+					tickResult <- err
+					return
+				}
+
+				err = asyncTransport.Publish(string(ExchangeJobSchedule), schedule.Job.Slug,
+					ScheduleJobEvent{
+						ScheduleId: schedule.Id,
+						JobRunId:   jobRun.Id,
+						Job:        schedule.Job.Slug,
+						Data:       schedule.Job.Data,
+					})
+			}
 		}
 
-		go schedule.Start(jobRun.Id, transport, scheduleResult)
-
-		scheduleStartError := <-scheduleResult
-		if scheduleStartError != nil {
-			tickResult <- scheduleStartError
+		if err != nil {
+			log.Logger.Printf("failed to start job %v", err)
+			tickResult <- err
 			return
 		}
 
@@ -133,6 +175,8 @@ func processTick(ctx context.Context, storage StorageDriver, transport AsyncTran
 			tickResult <- err
 			return
 		}
+
+		log.Logger.Printf("scheduled job %s/%s, run %s", schedule.Job.Id, schedule.Job.Slug, jobRun.Id)
 	}
 
 	tickResult <- nil
@@ -218,6 +262,17 @@ func getSchedulesReadyToStart(ctx context.Context, storage StorageDriver) ([]*Sc
 	}
 
 	readySchedules = append(readySchedules, rescheduleReady...)
+
+	// Temp mock
+	url, _ := url.Parse("http://localhost:5001/test-http")
+	readySchedules = append(readySchedules, &Schedule{
+		Id:            uuid.New(),
+		Description:   "test-http",
+		Frequency:     "*/5 * * * * *",
+		Job:           &Job{Slug: "test-http-job", Id: uuid.New()},
+		Configuration: ScheduleConfiguration{TransportType: Http, Url: *url},
+		Status:        Waiting,
+	})
 
 	return readySchedules, nil
 }

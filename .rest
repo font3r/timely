@@ -1,5 +1,5 @@
 @baseAddress = http://localhost:5000
-@scheduleId = 06851d59-2aa8-4963-a476-964009ac7f7f
+@scheduleId = bac2bf42-66da-40c6-bc20-359d9cf84d8e
 
 ### Get schedule
 GET {{baseAddress}}/api/v1/schedules/{{scheduleId}}
@@ -14,17 +14,19 @@ POST {{baseAddress}}/api/v1/schedules
 Content-Type: application/json
 
 {
-    "description": "test job description",
-    "frequency": "*/1 * * * *",
+    "description": "process user notifications test job description",
+    "frequency": "*/5 * * * * *",
     "schedule_start": "2024-08-25T21:18:55+02:00",
     "job": {
-        "slug": "test-example-job-1"
+        "slug": "process-user-notifications",
+        "data": {
+            "userId": "545753464587546"
+        }
     },
-    "retry_policy": {
-        "strategy": "constant",
-        "interval": "1m",
-        "count": 25
-    }
+    "configuration": {
+        "transportType": "http",
+        "url": "test"
+    },
 }
 
 ### Create schedule with 'once' frequency, starts instantly

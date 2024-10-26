@@ -10,7 +10,6 @@ import (
 	"timely/scheduler"
 
 	"github.com/google/uuid"
-
 	"github.com/spf13/viper"
 )
 
@@ -32,7 +31,7 @@ type ScheduleJobEvent struct {
 func Start() {
 	log.Logger.Println("starting ...")
 
-	tra, err := scheduler.NewTransportConnection(viper.GetString("transport.rabbitmq.connectionString"))
+	tra, err := scheduler.NewRabbitMqTransportConnection(viper.GetString("transport.rabbitmq.connectionString"))
 	if err != nil {
 		panic(fmt.Sprintf("test-app: create transport error - %s", err))
 	}
@@ -71,7 +70,7 @@ func Start() {
 	}
 }
 
-func processMockJob(tra *scheduler.Transport, scheduleId, jobRunId uuid.UUID, jobSlug string) error {
+func processMockJob(tra *scheduler.RabbitMqTransport, scheduleId, jobRunId uuid.UUID, jobSlug string) error {
 	var seq int16 = 0
 
 	for i := 0; i < 5; i++ {

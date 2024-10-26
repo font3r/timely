@@ -1,6 +1,7 @@
 package scheduler
 
 import (
+	"net/url"
 	"time"
 	log "timely/logger"
 
@@ -23,16 +24,22 @@ type Schedule struct {
 	Status            ScheduleStatus
 	Attempt           int
 	RetryPolicy       RetryPolicy
+	Configuration     ScheduleConfiguration
 	LastExecutionDate *time.Time
 	NextExecutionDate *time.Time
 	Job               *Job
 }
 
-type ScheduleJobEvent struct {
-	ScheduleId uuid.UUID       `json:"schedule_id"`
-	JobRunId   uuid.UUID       `json:"job_run_id"`
-	Job        string          `json:"job"`
-	Data       *map[string]any `json:"data"`
+type TransportType string
+
+const (
+	Http     TransportType = "http"
+	Rabbitmq TransportType = "rabbitmq"
+)
+
+type ScheduleConfiguration struct {
+	TransportType TransportType
+	Url           url.URL
 }
 
 func NewSchedule(description, frequency, slug string, data *map[string]any,
@@ -71,36 +78,12 @@ func getFirstExecution(frequency string, scheduleStart *time.Time) time.Time {
 	return sch.Next(time.Now().Round(time.Second))
 }
 
-func (s *Schedule) Start(runId uuid.UUID, transport AsyncTransportDriver, result chan<- error) {
-	err := transport.BindQueue(s.Job.Slug, string(ExchangeJobSchedule), s.Job.Slug)
-	if err != nil {
-		result <- err
-		return
-	}
-
-	err = transport.Publish(string(ExchangeJobSchedule), s.Job.Slug,
-		ScheduleJobEvent{
-			ScheduleId: s.Id,
-			JobRunId:   runId,
-			Job:        s.Job.Slug,
-			Data:       s.Job.Data,
-		})
-
-	if err != nil {
-		log.Logger.Printf("failed to start job %v", err)
-
-		result <- err
-		return
-	}
-
+func (s *Schedule) Start() {
 	s.Attempt++
 	s.Status = Scheduled
 
 	now := time.Now().Round(time.Second)
 	s.LastExecutionDate = &now
-
-	log.Logger.Printf("scheduled job %s/%s, run %s", s.Job.Id, s.Job.Slug, runId)
-	result <- nil
 }
 
 func (s *Schedule) Failed() error {

@@ -21,14 +21,14 @@ type AsyncTransportDriver interface {
 	BindQueue(queue, exchange, routingKey string) error
 }
 
-type Transport struct {
+type RabbitMqTransport struct {
 	connection        *amqp.Connection
 	channel           *amqp.Channel // TODO: performace - support for multiple channels - channel is very fragile, closed on error
 	declaredQueues    []string
 	declaredExchanges []string
 }
 
-func NewTransportConnection(url string) (*Transport, error) {
+func NewRabbitMqTransportConnection(url string) (*RabbitMqTransport, error) {
 	connection, err := amqp.Dial(url)
 	if err != nil {
 		log.Logger.Printf("error during opening rabbitmq connection - %v", err)
@@ -41,7 +41,7 @@ func NewTransportConnection(url string) (*Transport, error) {
 		return nil, err
 	}
 
-	transport := &Transport{
+	transport := &RabbitMqTransport{
 		connection: connection,
 		channel:    channel,
 	}
@@ -49,7 +49,7 @@ func NewTransportConnection(url string) (*Transport, error) {
 	return transport, nil
 }
 
-func (t *Transport) Publish(exchange, routingKey string, message any) error {
+func (t *RabbitMqTransport) Publish(exchange, routingKey string, message any) error {
 	data, err := json.Marshal(message)
 	if err != nil {
 		return errors.New("invalid message format")
@@ -73,7 +73,7 @@ func (t *Transport) Publish(exchange, routingKey string, message any) error {
 	return nil
 }
 
-func (t *Transport) Subscribe(queue string, handle func(message []byte) error) error {
+func (t *RabbitMqTransport) Subscribe(queue string, handle func(message []byte) error) error {
 	err := t.CreateQueue(queue)
 	if err != nil {
 		return err
@@ -94,12 +94,12 @@ func (t *Transport) Subscribe(queue string, handle func(message []byte) error) e
 			if err != nil {
 				log.Logger.Printf("error during consumer processing - %v\n", err)
 
-				err = delivery.Nack(false, false)
+				err = delivery.Nack(true, false)
 				if err != nil {
 					log.Logger.Printf("error during nack - %v\n", err)
 				}
 			} else {
-				err = delivery.Ack(false)
+				err = delivery.Ack(true)
 				if err != nil {
 					log.Logger.Printf("error during ack - %v\n", err)
 				}
@@ -108,7 +108,7 @@ func (t *Transport) Subscribe(queue string, handle func(message []byte) error) e
 	}
 }
 
-func (t *Transport) CreateQueue(queue string) error {
+func (t *RabbitMqTransport) CreateQueue(queue string) error {
 	queue = strings.Trim(queue, " ")
 
 	if slices.Contains(t.declaredQueues, queue) {
@@ -128,7 +128,7 @@ func (t *Transport) CreateQueue(queue string) error {
 	return nil
 }
 
-func (t *Transport) CreateExchange(exchange string) error {
+func (t *RabbitMqTransport) CreateExchange(exchange string) error {
 	exchange = strings.Trim(exchange, " ")
 
 	if slices.Contains(t.declaredExchanges, exchange) {
@@ -147,7 +147,7 @@ func (t *Transport) CreateExchange(exchange string) error {
 	return nil
 }
 
-func (t *Transport) BindQueue(queue, exchange, routingKey string) error {
+func (t *RabbitMqTransport) BindQueue(queue, exchange, routingKey string) error {
 	err := t.channel.QueueBind(queue, routingKey, exchange, false, amqp.Table{})
 
 	if err != nil {
