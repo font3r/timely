@@ -26,6 +26,7 @@ type ScheduleDto struct {
 	LastExecutionDate *time.Time               `json:"last_execution_date"`
 	NextExecutionDate *time.Time               `json:"next_execution_date"`
 	Job               JobDto                   `json:"job"`
+	Configuration     ScheduleConfigurationDto `json:"configuration"`
 }
 
 type RetryPolicyDto struct {
@@ -38,6 +39,11 @@ type JobDto struct {
 	Id   uuid.UUID       `json:"id"`
 	Slug string          `json:"slug"`
 	Data *map[string]any `json:"data"`
+}
+
+type ScheduleConfigurationDto struct {
+	TransportType scheduler.TransportType `json:"transportType"`
+	Url           string                  `json:"url"`
 }
 
 var (
@@ -79,6 +85,10 @@ func (h GetScheduleHandler) Handle(ctx context.Context, q GetSchedule) (Schedule
 			Id:   schedule.Job.Id,
 			Slug: schedule.Job.Slug,
 			Data: schedule.Job.Data,
+		},
+		Configuration: ScheduleConfigurationDto{
+			TransportType: schedule.Configuration.TransportType,
+			Url:           schedule.Configuration.Url,
 		},
 	}, nil
 }

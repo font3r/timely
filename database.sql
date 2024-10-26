@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS schedules
     retry_policy_strategy CHARACTER VARYING(32),
     retry_policy_count INT,
     retry_policy_interval CHARACTER VARYING(32),
+    transport_type CHARACTER VARYING(32),
+    url CHARACTER VARYING(1024),
     last_execution_date TIMESTAMP WITH TIME ZONE,
     next_execution_date TIMESTAMP WITH TIME ZONE
 );

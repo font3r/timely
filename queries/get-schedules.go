@@ -44,6 +44,10 @@ func (h GetSchedulesHandler) Handle(ctx context.Context) ([]ScheduleDto, error) 
 				Slug: schedule.Job.Slug,
 				Data: schedule.Job.Data,
 			},
+			Configuration: ScheduleConfigurationDto{
+				TransportType: schedule.Configuration.TransportType,
+				Url:           schedule.Configuration.Url,
+			},
 		})
 	}
 

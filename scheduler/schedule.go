@@ -1,7 +1,6 @@
 package scheduler
 
 import (
-	"net/url"
 	"time"
 	log "timely/logger"
 
@@ -39,11 +38,11 @@ const (
 
 type ScheduleConfiguration struct {
 	TransportType TransportType
-	Url           url.URL
+	Url           string
 }
 
 func NewSchedule(description, frequency, slug string, data *map[string]any,
-	policy RetryPolicy, scheduleStart *time.Time) Schedule {
+	policy RetryPolicy, configuration ScheduleConfiguration, scheduleStart *time.Time) Schedule {
 
 	execution := getFirstExecution(frequency, scheduleStart)
 
@@ -61,6 +60,7 @@ func NewSchedule(description, frequency, slug string, data *map[string]any,
 			Slug: slug,
 			Data: data,
 		},
+		Configuration: configuration,
 	}
 }
 

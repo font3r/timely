@@ -33,8 +33,8 @@ func createSchedule(v1 *mux.Router, app *Application) {
 		}
 
 		h := commands.CreateScheduleHandler{
-			Storage:   app.Scheduler.Storage,
-			Transport: app.Scheduler.AsyncTransport,
+			Storage:        app.Scheduler.Storage,
+			AsyncTransport: app.Scheduler.AsyncTransport,
 		}
 
 		result, err := h.Handle(req.Context(), c)

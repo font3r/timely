@@ -3,7 +3,6 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
-	"net/url"
 	"time"
 	log "timely/logger"
 
@@ -125,19 +124,19 @@ func processTick(ctx context.Context, storage StorageDriver, asyncTransport Asyn
 
 		// TODO: starting schedule should be transactional so outbox is most likely needed for async transport
 		// Job run has to be created before starting job because we can hit race condition with job statuses
-		// err = storage.AddJobRun(ctx, jobRun)
-		// if err != nil {
-		// 	log.Logger.Printf("error adding job run - %v\n", err)
-		// 	tickResult <- err
-		// 	return
-		// }
+		err = storage.AddJobRun(ctx, jobRun)
+		if err != nil {
+			log.Logger.Printf("error adding job run - %v\n", err)
+			tickResult <- err
+			return
+		}
 
 		schedule.Start()
 
 		switch schedule.Configuration.TransportType {
 		case Http:
 			{
-				err = syncTransport.Start(ctx, schedule.Configuration.Url.String(),
+				err = syncTransport.Start(ctx, schedule.Configuration.Url,
 					ScheduleJobRequest{
 						ScheduleId: schedule.Id,
 						JobRunId:   jobRun.Id,
@@ -262,17 +261,6 @@ func getSchedulesReadyToStart(ctx context.Context, storage StorageDriver) ([]*Sc
 	}
 
 	readySchedules = append(readySchedules, rescheduleReady...)
-
-	// Temp mock
-	url, _ := url.Parse("http://localhost:5001/test-http")
-	readySchedules = append(readySchedules, &Schedule{
-		Id:            uuid.New(),
-		Description:   "test-http",
-		Frequency:     "*/5 * * * * *",
-		Job:           &Job{Slug: "test-http-job", Id: uuid.New()},
-		Configuration: ScheduleConfiguration{TransportType: Http, Url: *url},
-		Status:        Waiting,
-	})
 
 	return readySchedules, nil
 }

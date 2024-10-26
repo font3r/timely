@@ -34,8 +34,8 @@ type ScheduleConfiguration struct {
 }
 
 type CreateScheduleHandler struct {
-	Storage   scheduler.StorageDriver
-	Transport scheduler.AsyncTransportDriver
+	Storage        scheduler.StorageDriver
+	AsyncTransport scheduler.AsyncTransportDriver
 }
 
 type CreateScheduleResponse struct {
@@ -53,20 +53,25 @@ func (h CreateScheduleHandler) Handle(ctx context.Context, c CreateScheduleComma
 	}
 
 	schedule := scheduler.NewSchedule(c.Description, c.Frequency, c.Job.Slug,
-		c.Job.Data, retryPolicy, c.ScheduleStart)
+		c.Job.Data, retryPolicy, scheduler.ScheduleConfiguration{
+			TransportType: c.Configuration.TransportType,
+			Url:           c.Configuration.Url},
+		c.ScheduleStart)
 
 	if err = h.Storage.Add(ctx, schedule); err != nil {
 		return nil, err
 	}
 
-	if err = h.Transport.CreateQueue(schedule.Job.Slug); err != nil {
-		// TODO: at this point we should delete job from db
-		return nil, err
-	}
+	if c.Configuration.TransportType == scheduler.Rabbitmq {
+		if err = h.AsyncTransport.CreateQueue(schedule.Job.Slug); err != nil {
+			// TODO: at this point we should delete job from db
+			return nil, err
+		}
 
-	if err = h.Transport.BindQueue(schedule.Job.Slug, string(scheduler.ExchangeJobSchedule),
-		schedule.Job.Slug); err != nil {
-		return nil, err
+		if err = h.AsyncTransport.BindQueue(schedule.Job.Slug, string(scheduler.ExchangeJobSchedule),
+			schedule.Job.Slug); err != nil {
+			return nil, err
+		}
 	}
 
 	return &CreateScheduleResponse{Id: schedule.Id}, nil
