@@ -14,6 +14,7 @@ type CreateScheduleCommand struct {
 	Job           JobConfiguration         `json:"job"`
 	RetryPolicy   RetryPolicyConfiguration `json:"retry_policy"`
 	ScheduleStart *time.Time               `json:"schedule_start"`
+	Configuration ScheduleConfiguration    `json:"configuration"`
 }
 
 type JobConfiguration struct {
@@ -25,6 +26,11 @@ type RetryPolicyConfiguration struct {
 	Strategy scheduler.StrategyType `json:"strategy"`
 	Count    int                    `json:"count"`
 	Interval string                 `json:"interval"`
+}
+
+type ScheduleConfiguration struct {
+	TransportType scheduler.TransportType `json:"transportType"`
+	Url           string                  `json:"url"`
 }
 
 type CreateScheduleHandler struct {

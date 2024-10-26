@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/url"
 	"time"
 	"timely/commands"
 	"timely/queries"
@@ -87,9 +88,24 @@ func validateCreateSchedule(req *http.Request) (commands.CreateScheduleCommand, 
 		err = errors.Join(errors.New("invalid job slug"))
 	}
 
+	if comm.Configuration == (commands.ScheduleConfiguration{}) {
+		err = errors.Join(errors.New("missing schedule configuration"))
+	}
+
 	// TODO: this would have to be validated against scheduler configurable available transports
-	if comm.TransportType != string(scheduler.Http) || comm.TransportType != string(scheduler.Rabbitmq) {
+	if comm.Configuration.TransportType != scheduler.Http && comm.Configuration.TransportType != scheduler.Rabbitmq {
 		err = errors.Join(errors.New("invalid transport type"))
+	}
+
+	if comm.Configuration.TransportType == scheduler.Http {
+		if comm.Configuration.Url == "" {
+			err = errors.Join(errors.New("missing url for http transport"))
+		} else {
+			_, err = url.ParseRequestURI(comm.Configuration.Url)
+			if err != nil {
+				err = errors.Join(errors.New("invalid url for http transport"))
+			}
+		}
 	}
 
 	if err != nil {
