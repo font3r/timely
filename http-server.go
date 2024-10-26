@@ -14,7 +14,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func registerRoutes(router *mux.Router, app *Application) {
+func registerApiRoutes(router *mux.Router, app *Application) {
 	v1 := router.PathPrefix("/api/v1").Subrouter()
 
 	createSchedule(v1, app)

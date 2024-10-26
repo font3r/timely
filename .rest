@@ -1,5 +1,5 @@
 @baseAddress = http://localhost:5000
-@scheduleId = 6beda73c-1d6c-4198-a408-033cb27c6abd
+@scheduleId = {{schedule.response.body.id}}
 
 ### Get schedule
 GET {{baseAddress}}/api/v1/schedules/{{scheduleId}}
@@ -15,7 +15,7 @@ Content-Type: application/json
 
 {
     "description": "process user notifications test job description",
-    "frequency": "*/5 * * * * *",
+    "frequency": "*/15 * * * * *",
     "job": {
         "slug": "process-user-notifications",
         "data": {
@@ -23,7 +23,8 @@ Content-Type: application/json
         }
     },
     "configuration": {
-        "transportType": "rabbitmq"
+        "transportType": "http",
+        "url": "http://localhost:5001/api/v1/jobs/process-user-notifications"
     }
 }
 

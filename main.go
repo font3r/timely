@@ -44,7 +44,8 @@ func main() {
 		Scheduler: scheduler.Start(ctx, storage, asyncTransport, syncTransport),
 	}
 
-	registerRoutes(r, app)
+	registerApiRoutes(r, app)
+	app.Scheduler.ListenForJobEvents(ctx, r)
 
 	log.Logger.Printf("listening on %v", srv.Addr)
 	if err := srv.ListenAndServe(); err != nil {

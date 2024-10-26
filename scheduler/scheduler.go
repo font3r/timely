@@ -3,10 +3,13 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"net/http"
 	"time"
 	log "timely/logger"
 
 	"github.com/google/uuid"
+	"github.com/gorilla/mux"
 )
 
 type Scheduler struct {
@@ -46,6 +49,8 @@ var (
 		Msg:  "fetch failed schedules failed"}
 )
 
+const SchedulerTickDelay = time.Second
+
 func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTransportDriver,
 	syncTransport SyncTransportDriver) *Scheduler {
 
@@ -65,6 +70,7 @@ func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTrans
 		return nil
 	}
 
+	go processJobEvents(ctx, storage, asyncTransport)
 	go func(storage StorageDriver, asyncTransport AsyncTransportDriver) {
 		tickResult := make(chan error)
 
@@ -76,11 +82,9 @@ func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTrans
 				log.Logger.Printf("processing scheduler tick error - %v", err)
 			}
 
-			time.Sleep(time.Second)
+			time.Sleep(SchedulerTickDelay)
 		}
 	}(storage, asyncTransport)
-
-	go processJobEvents(ctx, storage, asyncTransport)
 
 	return &scheduler
 }
@@ -136,7 +140,8 @@ func processTick(ctx context.Context, storage StorageDriver, asyncTransport Asyn
 		switch schedule.Configuration.TransportType {
 		case Http:
 			{
-				err = syncTransport.Start(ctx, schedule.Configuration.Url,
+				// TODO: such task have to be non-blocking to do not block tick but at the same time we have to wait to set schedule corectly
+				syncTransport.Start(ctx, schedule.Configuration.Url,
 					ScheduleJobRequest{
 						ScheduleId: schedule.Id,
 						JobRunId:   jobRun.Id,
@@ -181,13 +186,31 @@ func processTick(ctx context.Context, storage StorageDriver, asyncTransport Asyn
 	tickResult <- nil
 }
 
-func processJobEvents(ctx context.Context, storage StorageDriver, transport AsyncTransportDriver) {
-	err := transport.Subscribe(string(QueueJobStatus), func(message []byte) error {
+func (s *Scheduler) ListenForJobEvents(ctx context.Context, r *mux.Router) {
+	r.HandleFunc("/schedules/status", func(w http.ResponseWriter, r *http.Request) {
+		payload, err := io.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		err = handleJobEvent(ctx, payload, s.Storage)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		w.WriteHeader(http.StatusAccepted)
+	})
+}
+
+func processJobEvents(ctx context.Context, storage StorageDriver, asyncTransport AsyncTransportDriver) {
+	err := asyncTransport.Subscribe(string(QueueJobStatus), func(message []byte) error {
 		return handleJobEvent(ctx, message, storage)
 	})
 
 	if err != nil {
-		log.Logger.Printf("error during processing job events - %v\n", err)
+		log.Logger.Printf("error during init process job events - %v\n", err)
 		return
 	}
 }

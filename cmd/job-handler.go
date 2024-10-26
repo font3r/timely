@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/rand"
 	"net/http"
 	"time"
@@ -25,6 +27,16 @@ func main() {
 	v1.HandleFunc("/jobs/process-user-notifications", func(w http.ResponseWriter, r *http.Request) {
 		log.Logger.Println("received job start request")
 
+		var event ScheduleJobEvent
+		data, _ := io.ReadAll(r.Body)
+		err := json.Unmarshal(data, &event)
+		if err != nil {
+			w.WriteHeader(http.StatusAccepted)
+			fmt.Printf("error during request processing %s", err)
+			return
+		}
+
+		go processSyncJob(event)
 		w.WriteHeader(http.StatusAccepted)
 	}).Methods("POST")
 
@@ -49,6 +61,40 @@ type ScheduleJobEvent struct {
 	JobRunId   uuid.UUID       `json:"job_run_id"`
 	Job        string          `json:"job"`
 	Data       *map[string]any `json:"data"`
+}
+
+func processSyncJob(event ScheduleJobEvent) {
+	for i := 0; i < 5; i++ {
+		jobProcessing, _ := json.Marshal(JobStatusEvent{
+			ScheduleId: event.ScheduleId,
+			JobRunId:   event.JobRunId,
+			JobSlug:    event.Job,
+			Status:     "processing",
+		})
+
+		json, _ := json.Marshal(jobProcessing)
+		_, err := http.Post("http://localhost:5000/schedules/status", "application/json", bytes.NewBuffer(json))
+		if err != nil {
+			log.Logger.Println("received error on job processing event")
+			break
+		}
+
+		log.Logger.Println("sent processing event")
+		time.Sleep(time.Second)
+	}
+
+	jobSuccess := JobStatusEvent{
+		ScheduleId: event.ScheduleId,
+		JobRunId:   event.JobRunId,
+		JobSlug:    event.Job,
+		Status:     "succeed",
+		Reason:     "success",
+	}
+
+	json, _ := json.Marshal(jobSuccess)
+	http.Post("http://localhost:5000/schedules/status", "application/json", bytes.NewBuffer(json))
+
+	log.Logger.Println("sent success event")
 }
 
 func Start() {
@@ -94,8 +140,6 @@ func Start() {
 }
 
 func processMockJob(tra *scheduler.RabbitMqTransport, scheduleId, jobRunId uuid.UUID, jobSlug string) error {
-	var seq int16 = 0
-
 	for i := 0; i < 5; i++ {
 		if rand.Intn(10) < 0 { // random 10% failure rate for testing
 			err := tra.Publish(string(scheduler.ExchangeJobStatus),
@@ -126,7 +170,6 @@ func processMockJob(tra *scheduler.RabbitMqTransport, scheduleId, jobRunId uuid.
 			log.Logger.Printf("error during publishing job status %s", err)
 		}
 
-		seq++
 		time.Sleep(time.Second)
 	}
 
