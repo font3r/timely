@@ -244,9 +244,6 @@ func handleJobEvent(ctx context.Context, message []byte, storage StorageDriver) 
 	}
 
 	switch jobStatus.Status {
-	// TODO: handle job not started within X time
-	case string(JobProcessing):
-		jobRun.Status = JobProcessing
 	case string(JobFailed):
 		{
 			jobRun.Failed(jobStatus.Reason)

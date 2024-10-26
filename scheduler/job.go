@@ -15,10 +15,9 @@ type Job struct {
 type JobRunStatus string
 
 const (
-	JobWaiting    JobRunStatus = "waiting"    // waiting to receive first job status
-	JobProcessing JobRunStatus = "processing" // job processing
-	JobSucceed    JobRunStatus = "succeed"    // successfully processed
-	JobFailed     JobRunStatus = "failed"     // error during processing
+	JobWaiting JobRunStatus = "waiting" // waiting to receive first job status
+	JobSucceed JobRunStatus = "succeed" // successfully processed
+	JobFailed  JobRunStatus = "failed"  // error during processing
 )
 
 type JobRun struct {
