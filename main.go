@@ -34,13 +34,15 @@ func main() {
 		log.Logger.Fatal(err)
 	}
 
-	transport, err := scheduler.NewTransportConnection(viper.GetString("transport.rabbitmq.connectionString"))
+	asyncTransport, err := scheduler.NewRabbitMqTransportConnection(viper.GetString("transport.rabbitmq.connectionString"))
 	if err != nil {
 		panic(fmt.Sprintf("create transport error %s", err))
 	}
 
+	syncTransport := scheduler.HttpTransport{}
+
 	app := &Application{
-		Scheduler: scheduler.Start(ctx, storage, transport),
+		Scheduler: scheduler.Start(ctx, storage, asyncTransport, syncTransport),
 	}
 
 	registerRoutes(r, app)
