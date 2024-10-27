@@ -21,6 +21,7 @@ type Scheduler struct {
 
 type JobStatusEvent struct {
 	ScheduleId uuid.UUID `json:"schedule_id"`
+	GroupId    uuid.UUID `json:"group_id"`
 	JobRunId   uuid.UUID `json:"job_run_id"`
 	JobSlug    string    `json:"job_slug"`
 	Status     string    `json:"status"`
@@ -29,6 +30,7 @@ type JobStatusEvent struct {
 
 type ScheduleJobEvent struct {
 	ScheduleId uuid.UUID       `json:"schedule_id"`
+	GroupId    uuid.UUID       `json:"group_id"`
 	JobRunId   uuid.UUID       `json:"job_run_id"`
 	Job        string          `json:"job"`
 	Data       *map[string]any `json:"data"`
@@ -139,7 +141,7 @@ func processTick(ctx context.Context, storage StorageDriver, asyncTransport Asyn
 	}
 
 	for _, schedule := range schedules {
-		jobRun := NewJobRun(schedule.Id)
+		jobRun := NewJobRun(schedule.Id, schedule.GroupId)
 
 		// TODO: starting schedule should be transactional so outbox is most likely needed for async transport
 		// Job run has to be created before starting job because we can hit race condition with job statuses
@@ -159,6 +161,7 @@ func processTick(ctx context.Context, storage StorageDriver, asyncTransport Asyn
 				syncTransport.Start(ctx, schedule.Configuration.Url,
 					ScheduleJobRequest{
 						ScheduleId: schedule.Id,
+						GroupId:    jobRun.GroupId,
 						JobRunId:   jobRun.Id,
 						Job:        schedule.Job.Slug,
 						Data:       schedule.Job.Data,
@@ -175,6 +178,7 @@ func processTick(ctx context.Context, storage StorageDriver, asyncTransport Asyn
 				err = asyncTransport.Publish(string(ExchangeJobSchedule), schedule.Job.Slug,
 					ScheduleJobEvent{
 						ScheduleId: schedule.Id,
+						GroupId:    jobRun.GroupId,
 						JobRunId:   jobRun.Id,
 						Job:        schedule.Job.Slug,
 						Data:       schedule.Job.Data,
@@ -239,10 +243,17 @@ func handleJobEvent(ctx context.Context, message []byte, storage StorageDriver) 
 		return ErrReceivedStatusForUnknownSchedule
 	}
 
-	// TODO: at this point we can detect if we received status for stale job
-	jobRun, err := storage.GetJobRun(ctx, jobStatus.JobRunId)
+	groupRuns, err := storage.GetJobRunGroup(ctx, jobStatus.ScheduleId, jobStatus.GroupId)
 	if err != nil {
 		return err
+	}
+
+	var jobRun *JobRun
+	for _, jr := range groupRuns {
+		if jr.Id == jobStatus.JobRunId {
+			jobRun = jr
+			break
+		}
 	}
 
 	if jobRun == nil {
@@ -251,10 +262,10 @@ func handleJobEvent(ctx context.Context, message []byte, storage StorageDriver) 
 
 	switch jobStatus.Status {
 	case string(JobFailed):
-		onJobFailed(schedule, jobRun, jobStatus)
+		onJobFailed(schedule, jobRun, jobStatus, len(groupRuns))
 	case string(JobSucceed):
 		jobRun.Succeed()
-		schedule.Succeed() // TODO: after one time schedules we have to clean transport
+		schedule.Succeed() // TODO: after one time schedules we have to clean some transport methods eg. rabbit
 	}
 
 	err = storage.UpdateJobRun(ctx, *jobRun)
@@ -270,9 +281,9 @@ func handleJobEvent(ctx context.Context, message []byte, storage StorageDriver) 
 	return nil
 }
 
-func onJobFailed(schedule *Schedule, jobRun *JobRun, jobStatus JobStatusEvent) error {
+func onJobFailed(schedule *Schedule, jobRun *JobRun, jobStatus JobStatusEvent, attempt int) error {
 	jobRun.Failed(jobStatus.Reason)
-	if err := schedule.Failed(jobRun.Attempt); err != nil {
+	if err := schedule.Failed(attempt); err != nil {
 		return err
 	}
 

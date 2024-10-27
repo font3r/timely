@@ -119,6 +119,10 @@ func (s storageDriverFake) GetJobRun(ctx context.Context, id uuid.UUID) (*schedu
 	panic("implement me")
 }
 
+func (s storageDriverFake) GetJobRunGroup(ctx context.Context, scheduleId uuid.UUID, groupId uuid.UUID) ([]*scheduler.JobRun, error) {
+	panic("implement me")
+}
+
 func (s storageDriverFake) GetJobRuns(ctx context.Context, scheduleId uuid.UUID) ([]*scheduler.JobRun, error) {
 	panic("implement me")
 }

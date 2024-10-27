@@ -50,6 +50,7 @@ func main() {
 
 type JobStatusEvent struct {
 	ScheduleId uuid.UUID `json:"schedule_id"`
+	GroupId    uuid.UUID `json:"group_id"`
 	JobRunId   uuid.UUID `json:"job_run_id"`
 	JobSlug    string    `json:"job_slug"`
 	Status     string    `json:"status"`
@@ -58,15 +59,31 @@ type JobStatusEvent struct {
 
 type ScheduleJobEvent struct {
 	ScheduleId uuid.UUID       `json:"schedule_id"`
+	GroupId    uuid.UUID       `json:"group_id"`
 	JobRunId   uuid.UUID       `json:"job_run_id"`
 	Job        string          `json:"job"`
 	Data       *map[string]any `json:"data"`
 }
 
 func processSyncJob(event ScheduleJobEvent) {
+	jobFailed := JobStatusEvent{
+		ScheduleId: event.ScheduleId,
+		GroupId:    event.GroupId,
+		JobRunId:   event.JobRunId,
+		JobSlug:    event.Job,
+		Status:     "failed",
+		Reason:     "failed due to jitter error",
+	}
+
+	jsonqwe, _ := json.Marshal(jobFailed)
+	http.Post("http://localhost:5000/schedules/status", "application/json", bytes.NewBuffer(jsonqwe))
+
+	return
+
 	for i := 0; i < 5; i++ {
 		jobProcessing, _ := json.Marshal(JobStatusEvent{
 			ScheduleId: event.ScheduleId,
+			GroupId:    event.GroupId,
 			JobRunId:   event.JobRunId,
 			JobSlug:    event.Job,
 			Status:     "processing",
@@ -85,6 +102,7 @@ func processSyncJob(event ScheduleJobEvent) {
 
 	jobSuccess := JobStatusEvent{
 		ScheduleId: event.ScheduleId,
+		GroupId:    event.GroupId,
 		JobRunId:   event.JobRunId,
 		JobSlug:    event.Job,
 		Status:     "succeed",
@@ -123,7 +141,7 @@ func Start() {
 					log.Logger.Printf("job data slug %s with data %+v", jobSlug, *event.Data)
 				}
 
-				err = processMockJob(tra, event.ScheduleId, event.JobRunId, jobSlug)
+				err = processMockJob(tra, event.ScheduleId, event.GroupId, event.JobRunId, jobSlug)
 				if err != nil {
 					log.Logger.Printf("error during job processing - %s", err)
 				}
@@ -139,12 +157,13 @@ func Start() {
 	}
 }
 
-func processMockJob(tra *scheduler.RabbitMqTransport, scheduleId, jobRunId uuid.UUID, jobSlug string) error {
+func processMockJob(tra *scheduler.RabbitMqTransport, scheduleId, groupId, jobRunId uuid.UUID, jobSlug string) error {
 	for i := 0; i < 5; i++ {
 		if rand.Intn(10) < 0 { // random 10% failure rate for testing
 			err := tra.Publish(string(scheduler.ExchangeJobStatus),
 				string(scheduler.RoutingKeyJobStatus), JobStatusEvent{
 					ScheduleId: scheduleId,
+					GroupId:    groupId,
 					JobRunId:   jobRunId,
 					JobSlug:    jobSlug,
 					Status:     "failed",
@@ -161,6 +180,7 @@ func processMockJob(tra *scheduler.RabbitMqTransport, scheduleId, jobRunId uuid.
 		err := tra.Publish(string(scheduler.ExchangeJobStatus),
 			string(scheduler.RoutingKeyJobStatus), JobStatusEvent{
 				ScheduleId: scheduleId,
+				GroupId:    groupId,
 				JobRunId:   jobRunId,
 				JobSlug:    jobSlug,
 				Status:     "processing",
@@ -176,6 +196,7 @@ func processMockJob(tra *scheduler.RabbitMqTransport, scheduleId, jobRunId uuid.
 	err := tra.Publish(string(scheduler.ExchangeJobStatus),
 		string(scheduler.RoutingKeyJobStatus), JobStatusEvent{
 			ScheduleId: scheduleId,
+			GroupId:    groupId,
 			JobRunId:   jobRunId,
 			JobSlug:    jobSlug,
 			Status:     "succeed",

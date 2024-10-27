@@ -21,20 +21,20 @@ const (
 
 type JobRun struct {
 	Id         uuid.UUID
+	GroupId    uuid.UUID
 	ScheduleId uuid.UUID
 	Status     JobRunStatus
-	Attempt    int
 	Reason     *string
 	StartDate  time.Time
 	EndDate    *time.Time
 }
 
-func NewJobRun(scheduleId uuid.UUID) JobRun {
+func NewJobRun(scheduleId uuid.UUID, groupId uuid.UUID) JobRun {
 	return JobRun{
 		Id:         uuid.New(),
 		ScheduleId: scheduleId,
+		GroupId:    groupId,
 		Status:     JobWaiting,
-		Attempt:    1,
 		Reason:     nil,
 		StartDate:  time.Now().Round(time.Second),
 		EndDate:    nil,
@@ -52,5 +52,4 @@ func (jr *JobRun) Failed(reason string) {
 	jr.Reason = &reason
 	end := time.Now().Round(time.Second)
 	jr.EndDate = &end
-	jr.Attempt++
 }

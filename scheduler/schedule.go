@@ -25,6 +25,7 @@ const (
 
 type Schedule struct {
 	Id                uuid.UUID
+	GroupId           uuid.UUID
 	Description       string
 	Frequency         string
 	Status            ScheduleStatus
@@ -54,6 +55,7 @@ func NewSchedule(description, frequency, slug string, data *map[string]any,
 
 	return Schedule{
 		Id:                uuid.New(),
+		GroupId:           uuid.New(),
 		Description:       description,
 		Frequency:         frequency,
 		Status:            Waiting,

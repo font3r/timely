@@ -20,6 +20,7 @@ type HttpTransport struct {
 
 type ScheduleJobRequest struct {
 	ScheduleId uuid.UUID       `json:"schedule_id"`
+	GroupId    uuid.UUID       `json:"group_id"`
 	JobRunId   uuid.UUID       `json:"job_run_id"`
 	Job        string          `json:"job"`
 	Data       *map[string]any `json:"data"`

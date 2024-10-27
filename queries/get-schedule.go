@@ -17,16 +17,17 @@ type GetScheduleHandler struct {
 }
 
 type ScheduleDetailsDto struct {
-	Id                uuid.UUID                `json:"id"`
-	Description       string                   `json:"description"`
-	Frequency         string                   `json:"frequency"`
-	Status            scheduler.ScheduleStatus `json:"status"`
-	RetryPolicy       *RetryPolicyDto          `json:"retry_policy"`
-	LastExecutionDate *time.Time               `json:"last_execution_date"`
-	NextExecutionDate *time.Time               `json:"next_execution_date"`
-	Job               ScheduleDetailsJobDto    `json:"job"`
-	Configuration     ScheduleConfigurationDto `json:"configuration"`
-	RecentJobRuns     []JobRunDto              `json:"recent_job_runs"`
+	Id                uuid.UUID                 `json:"id"`
+	GroupId           uuid.UUID                 `json:"group_id"`
+	Description       string                    `json:"description"`
+	Frequency         string                    `json:"frequency"`
+	Status            scheduler.ScheduleStatus  `json:"status"`
+	RetryPolicy       *RetryPolicyDto           `json:"retry_policy"`
+	LastExecutionDate *time.Time                `json:"last_execution_date"`
+	NextExecutionDate *time.Time                `json:"next_execution_date"`
+	Job               ScheduleDetailsJobDto     `json:"job"`
+	Configuration     ScheduleConfigurationDto  `json:"configuration"`
+	RecentJobRuns     map[uuid.UUID][]JobRunDto `json:"recent_job_runs"`
 }
 
 type RetryPolicyDto struct {
@@ -42,8 +43,8 @@ type ScheduleDetailsJobDto struct {
 }
 
 type JobRunDto struct {
+	Id        uuid.UUID              `json:"id"`
 	Status    scheduler.JobRunStatus `json:"status"`
-	Attempt   int                    `json:"attempt"`
 	Reason    *string                `json:"reason"`
 	StartDate time.Time              `json:"start_date"`
 	EndDate   *time.Time             `json:"end_date"`
@@ -85,19 +86,21 @@ func (h GetScheduleHandler) Handle(ctx context.Context, q GetSchedule) (Schedule
 		}
 	}
 
-	recentJobRunsDto := make([]JobRunDto, 0)
+	recentJobRunsDto := make(map[uuid.UUID][]JobRunDto)
 	for _, jobRun := range jobRuns {
-		recentJobRunsDto = append(recentJobRunsDto, JobRunDto{
-			Status:    jobRun.Status,
-			Attempt:   jobRun.Attempt,
-			Reason:    jobRun.Reason,
-			StartDate: jobRun.StartDate,
-			EndDate:   jobRun.EndDate,
-		})
+		recentJobRunsDto[jobRun.GroupId] = append(recentJobRunsDto[jobRun.GroupId],
+			JobRunDto{
+				Id:        jobRun.Id,
+				Status:    jobRun.Status,
+				Reason:    jobRun.Reason,
+				StartDate: jobRun.StartDate,
+				EndDate:   jobRun.EndDate,
+			})
 	}
 
 	return ScheduleDetailsDto{
 		Id:                schedule.Id,
+		GroupId:           schedule.GroupId,
 		Description:       schedule.Description,
 		Frequency:         schedule.Frequency,
 		Status:            schedule.Status,
