@@ -10,10 +10,17 @@ import (
 type ScheduleStatus string
 
 const (
-	Waiting   ScheduleStatus = "waiting"   // waiting to schedule next job
-	Scheduled ScheduleStatus = "scheduled" // job scheduled
-	Succeed   ScheduleStatus = "succeed"   // successfully processed
-	Failed    ScheduleStatus = "failed"    // error during processing
+	// new schedule waiting for start
+	Waiting ScheduleStatus = "waiting"
+
+	// job scheduled, waiting for result
+	Scheduled ScheduleStatus = "scheduled"
+
+	// successfully processed, shedule finished
+	Succeed ScheduleStatus = "succeed"
+
+	// error during processing, schedule failed, waiting to retry (if configured)
+	Failed ScheduleStatus = "failed"
 )
 
 type Schedule struct {
@@ -78,6 +85,20 @@ func (s *Schedule) Start() {
 	s.LastExecutionDate = &now
 }
 
+func (s *Schedule) Succeed() {
+	if s.Frequency == string(Once) {
+		s.NextExecutionDate = nil
+		s.Status = Succeed
+		return
+	}
+
+	sch, _ := CronParser.Parse(s.Frequency)
+	nextExec := sch.Next(time.Now().Round(time.Second))
+
+	s.NextExecutionDate = &nextExec
+	s.Status = Waiting
+}
+
 func (s *Schedule) Failed(attempt int) error {
 	s.Status = Failed
 
@@ -108,18 +129,4 @@ func (s *Schedule) Failed(attempt int) error {
 	}
 
 	return nil
-}
-
-func (s *Schedule) Succeed() {
-	if s.Frequency == string(Once) {
-		s.NextExecutionDate = nil
-		s.Status = Succeed
-		return
-	}
-
-	sch, _ := CronParser.Parse(s.Frequency)
-	nextExec := sch.Next(time.Now().Round(time.Second))
-
-	s.NextExecutionDate = &nextExec
-	s.Status = Waiting
 }

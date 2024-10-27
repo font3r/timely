@@ -41,12 +41,9 @@ var (
 	ErrReceivedStatusForUnknownJobRun = &Error{
 		Code: "UNKNOWN_JOB_RUN",
 		Msg:  "received status for unknown job run"}
-	ErrFetchNewSchedules = &Error{
-		Code: "FETCH_NEW_SCHEDULES_ERROR",
-		Msg:  "fetch new schedules failed"}
-	ErrFetchFailedSchedules = &Error{
-		Code: "FETCH_FAILED_SCHEDULES_ERROR",
-		Msg:  "fetch failed schedules failed"}
+	ErrFetchAwaitingSchedules = &Error{
+		Code: "FETCH_AWAITING_SCHEDULES_ERROR",
+		Msg:  "fetch awaiting schedules failed"}
 )
 
 const SchedulerTickDelay = time.Second
@@ -87,6 +84,24 @@ func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTrans
 	}(storage, asyncTransport)
 
 	return &scheduler
+}
+
+func (s *Scheduler) ListenForJobEvents(ctx context.Context, r *mux.Router) {
+	r.HandleFunc("/schedules/status", func(w http.ResponseWriter, r *http.Request) {
+		payload, err := io.ReadAll(r.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		err = handleJobEvent(ctx, payload, s.Storage)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		w.WriteHeader(http.StatusAccepted)
+	})
 }
 
 func createAsyncTransportDependencies(transport AsyncTransportDriver) error {
@@ -186,22 +201,13 @@ func processTick(ctx context.Context, storage StorageDriver, asyncTransport Asyn
 	tickResult <- nil
 }
 
-func (s *Scheduler) ListenForJobEvents(ctx context.Context, r *mux.Router) {
-	r.HandleFunc("/schedules/status", func(w http.ResponseWriter, r *http.Request) {
-		payload, err := io.ReadAll(r.Body)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
+func getSchedulesReadyToStart(ctx context.Context, storage StorageDriver) ([]*Schedule, error) {
+	awaitingSchedules, err := storage.GetAwaitingSchedules(ctx)
+	if err != nil {
+		return nil, ErrFetchAwaitingSchedules
+	}
 
-		err = handleJobEvent(ctx, payload, s.Storage)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		w.WriteHeader(http.StatusAccepted)
-	})
+	return awaitingSchedules, nil
 }
 
 func processJobEvents(ctx context.Context, storage StorageDriver, asyncTransport AsyncTransportDriver) {
@@ -245,12 +251,7 @@ func handleJobEvent(ctx context.Context, message []byte, storage StorageDriver) 
 
 	switch jobStatus.Status {
 	case string(JobFailed):
-		{
-			jobRun.Failed(jobStatus.Reason)
-			if err = schedule.Failed(jobRun.Attempt); err != nil {
-				return err
-			}
-		}
+		onJobFailed(schedule, jobRun, jobStatus)
 	case string(JobSucceed):
 		jobRun.Succeed()
 		schedule.Succeed() // TODO: after one time schedules we have to clean transport
@@ -269,18 +270,11 @@ func handleJobEvent(ctx context.Context, message []byte, storage StorageDriver) 
 	return nil
 }
 
-func getSchedulesReadyToStart(ctx context.Context, storage StorageDriver) ([]*Schedule, error) {
-	readySchedules, err := storage.GetSchedulesWithStatus(ctx, Waiting)
-	if err != nil {
-		return nil, ErrFetchNewSchedules
+func onJobFailed(schedule *Schedule, jobRun *JobRun, jobStatus JobStatusEvent) error {
+	jobRun.Failed(jobStatus.Reason)
+	if err := schedule.Failed(jobRun.Attempt); err != nil {
+		return err
 	}
 
-	rescheduleReady, err := storage.GetSchedulesReadyToReschedule(ctx)
-	if err != nil {
-		return nil, ErrFetchFailedSchedules
-	}
-
-	readySchedules = append(readySchedules, rescheduleReady...)
-
-	return readySchedules, nil
+	return nil
 }

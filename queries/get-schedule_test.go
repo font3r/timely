@@ -87,11 +87,7 @@ func (s storageDriverFake) GetScheduleByJobSlug(ctx context.Context, slug string
 	panic("implement me")
 }
 
-func (s storageDriverFake) GetSchedulesWithStatus(ctx context.Context, status scheduler.ScheduleStatus) ([]*scheduler.Schedule, error) {
-	panic("implement me")
-}
-
-func (s storageDriverFake) GetSchedulesReadyToReschedule(ctx context.Context) ([]*scheduler.Schedule, error) {
+func (s storageDriverFake) GetAwaitingSchedules(ctx context.Context) ([]*scheduler.Schedule, error) {
 	panic("implement me")
 }
 

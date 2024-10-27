@@ -9,9 +9,14 @@ import (
 type JobRunStatus string
 
 const (
-	JobWaiting JobRunStatus = "waiting" // waiting to receive first job status
-	JobSucceed JobRunStatus = "succeed" // successfully processed
-	JobFailed  JobRunStatus = "failed"  // error during processing
+	// waiting to receive first job status
+	JobWaiting JobRunStatus = "waiting"
+
+	// successfully processed
+	JobSucceed JobRunStatus = "succeed"
+
+	// error during processing
+	JobFailed JobRunStatus = "failed"
 )
 
 type JobRun struct {

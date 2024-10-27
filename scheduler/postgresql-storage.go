@@ -13,8 +13,7 @@ import (
 
 type StorageDriver interface {
 	GetScheduleById(ctx context.Context, id uuid.UUID) (*Schedule, error)
-	GetSchedulesWithStatus(ctx context.Context, status ScheduleStatus) ([]*Schedule, error)
-	GetSchedulesReadyToReschedule(ctx context.Context) ([]*Schedule, error)
+	GetAwaitingSchedules(ctx context.Context) ([]*Schedule, error)
 	GetAll(ctx context.Context) ([]*Schedule, error)
 	Add(ctx context.Context, schedule Schedule) error
 	DeleteScheduleById(ctx context.Context, id uuid.UUID) error
@@ -75,54 +74,14 @@ func (pg Pgsql) GetScheduleById(ctx context.Context, id uuid.UUID) (*Schedule, e
 	return &schedule, nil
 }
 
-func (pg Pgsql) GetSchedulesWithStatus(ctx context.Context, status ScheduleStatus) ([]*Schedule, error) {
+func (pg Pgsql) GetAwaitingSchedules(ctx context.Context) ([]*Schedule, error) {
 	sql := `SELECT js.id, js.description, js.status, js.frequency, js.retry_policy_strategy, js.retry_policy_count, 
 				js.retry_policy_interval, js.transport_type, js.url, js.last_execution_date, js.next_execution_date, j.id, j.slug, j.data
 			FROM jobs AS j 
 			JOIN schedules AS js ON js.id = j.schedule_id
-			WHERE status = $1 AND next_execution_date <= $2`
+			WHERE status IN ($1, $2) AND next_execution_date <= $3`
 
-	rows, err := pg.pool.Query(ctx, sql, status, time.Now())
-
-	if err != nil {
-		return nil, err
-	}
-
-	var jobData string
-	schedules := make([]*Schedule, 0)
-	for rows.Next() {
-		var schedule = Schedule{
-			RetryPolicy: RetryPolicy{},
-			Job:         &Job{},
-		}
-		err = rows.Scan(&schedule.Id, &schedule.Description, &schedule.Status, &schedule.Frequency,
-			&schedule.RetryPolicy.Strategy, &schedule.RetryPolicy.Count, &schedule.RetryPolicy.Interval,
-			&schedule.Configuration.TransportType, &schedule.Configuration.Url, &schedule.LastExecutionDate,
-			&schedule.NextExecutionDate, &schedule.Job.Id, &schedule.Job.Slug, &jobData)
-
-		if err != nil {
-			return nil, err
-		}
-
-		err = json.Unmarshal([]byte(jobData), &schedule.Job.Data)
-		if err != nil {
-			return nil, err
-		}
-
-		schedules = append(schedules, &schedule)
-	}
-
-	return schedules, nil
-}
-
-func (pg Pgsql) GetSchedulesReadyToReschedule(ctx context.Context) ([]*Schedule, error) {
-	sql := `SELECT js.id, js.description, js.status, js.frequency, js.retry_policy_strategy, js.retry_policy_count, 
-				js.retry_policy_interval, js.transport_type, js.url, js.last_execution_date, js.next_execution_date, j.id, j.slug, j.data
-			FROM jobs AS j 
-			JOIN schedules AS js ON js.id = j.schedule_id
-			WHERE (status = $1 OR status = $2) AND next_execution_date <= $3`
-
-	rows, err := pg.pool.Query(ctx, sql, Failed, Succeed, time.Now())
+	rows, err := pg.pool.Query(ctx, sql, Waiting, Failed, time.Now())
 
 	if err != nil {
 		return nil, err
