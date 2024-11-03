@@ -16,11 +16,8 @@ const (
 	// job scheduled, waiting for result
 	Scheduled ScheduleStatus = "scheduled"
 
-	// successfully processed, shedule finished
-	Succeed ScheduleStatus = "succeed"
-
-	// error during processing, schedule failed, waiting to retry (if configured)
-	Failed ScheduleStatus = "failed"
+	// schedule finished, either with job completed or failed that cannot be retried further
+	Finished ScheduleStatus = "finished"
 )
 
 type Schedule struct {
@@ -51,7 +48,7 @@ type ScheduleConfiguration struct {
 func NewSchedule(description, frequency, slug string, data *map[string]any,
 	policy RetryPolicy, configuration ScheduleConfiguration, scheduleStart *time.Time) Schedule {
 
-	execution := getFirstExecution(frequency, scheduleStart)
+	execution := getFirstExecutionTime(frequency, scheduleStart)
 
 	return Schedule{
 		Id:                uuid.New(),
@@ -67,20 +64,6 @@ func NewSchedule(description, frequency, slug string, data *map[string]any,
 	}
 }
 
-func getFirstExecution(frequency string, scheduleStart *time.Time) time.Time {
-	if scheduleStart != nil {
-		return *scheduleStart
-	}
-
-	if frequency == string(Once) {
-		return time.Now().Round(time.Second)
-	}
-
-	sch, _ := CronParser.Parse(frequency)
-
-	return sch.Next(time.Now().Round(time.Second))
-}
-
 func (s *Schedule) Start() {
 	s.Status = Scheduled
 	now := time.Now().Round(time.Second)
@@ -88,25 +71,27 @@ func (s *Schedule) Start() {
 }
 
 func (s *Schedule) Succeed() {
-	if s.Frequency == string(Once) {
+	nextExec := getNextExecutionTime(s.Frequency)
+
+	if nextExec == (time.Time{}) {
 		s.NextExecutionDate = nil
-		s.Status = Succeed
-		return
+		s.Status = Finished
+	} else {
+		s.NextExecutionDate = &nextExec
+		s.Status = Waiting
 	}
-
-	sch, _ := CronParser.Parse(s.Frequency)
-	nextExec := sch.Next(time.Now().Round(time.Second))
-
-	s.NextExecutionDate = &nextExec
-	s.Status = Waiting
 }
 
 func (s *Schedule) Failed(attempt int) error {
-	s.Status = Failed
-
 	if s.RetryPolicy == (RetryPolicy{}) {
-		s.NextExecutionDate = nil
-		return nil
+		nextExec := getNextExecutionTime(s.Frequency)
+		if nextExec == (time.Time{}) {
+			s.NextExecutionDate = nil
+			s.Status = Finished
+		} else {
+			s.NextExecutionDate = &nextExec
+			s.Status = Waiting
+		}
 	}
 
 	var next time.Time
@@ -122,13 +107,47 @@ func (s *Schedule) Failed(attempt int) error {
 		return err
 	}
 
-	if next == (time.Time{}) {
-		s.NextExecutionDate = nil
-		log.Logger.Println("schedule failed after retrying")
-	} else {
+	if next != (time.Time{}) {
 		s.NextExecutionDate = &next
+		s.Status = Waiting
 		log.Logger.Printf("schedule retrying at %v\n", next)
+
+		return nil
+	}
+
+	nextExec := getNextExecutionTime(s.Frequency)
+	if nextExec == (time.Time{}) {
+		s.NextExecutionDate = nil
+		s.Status = Finished
+	} else {
+		s.NextExecutionDate = &nextExec
+		s.Status = Waiting
 	}
 
 	return nil
+}
+
+func getFirstExecutionTime(frequency string, scheduleStart *time.Time) time.Time {
+	if scheduleStart != nil {
+		return *scheduleStart
+	}
+
+	if frequency == string(Once) {
+		return time.Now().Round(time.Second)
+	}
+
+	sch, _ := CronParser.Parse(frequency)
+
+	return sch.Next(time.Now().Round(time.Second))
+}
+
+func getNextExecutionTime(frequency string) time.Time {
+	if frequency == string(Once) {
+		return time.Time{}
+	}
+
+	sch, _ := CronParser.Parse(frequency)
+	nextExec := sch.Next(time.Now().Round(time.Second))
+
+	return nextExec
 }

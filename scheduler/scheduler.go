@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 	log "timely/logger"
 
@@ -177,7 +178,7 @@ func processTick(ctx context.Context, storage StorageDriver, asyncTransport Asyn
 func getSchedulesReadyToStart(ctx context.Context, storage StorageDriver) ([]*Schedule, error) {
 	awaitingSchedules, err := storage.GetAwaitingSchedules(ctx)
 	if err != nil {
-		return nil, ErrFetchAwaitingSchedules
+		return nil, errors.Join(ErrFetchAwaitingSchedules, err)
 	}
 
 	return awaitingSchedules, nil

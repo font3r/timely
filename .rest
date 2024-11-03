@@ -15,7 +15,7 @@ Content-Type: application/json
 
 {
     "description": "process user notifications test job description",
-    "frequency": "*/1 * * * * *",
+    "frequency": "*/10 * * * * *",
     "job": {
         "slug": "process-user-notifications",
         "data": {

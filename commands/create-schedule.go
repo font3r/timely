@@ -62,6 +62,7 @@ func (h CreateScheduleHandler) Handle(ctx context.Context, c CreateScheduleComma
 		return nil, err
 	}
 
+	// TODO: that part probably should not be a part of command handler
 	if c.Configuration.TransportType == scheduler.Rabbitmq {
 		if err = h.AsyncTransport.CreateQueue(schedule.Job.Slug); err != nil {
 			// TODO: at this point we should delete job from db

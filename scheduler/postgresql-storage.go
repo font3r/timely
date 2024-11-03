@@ -80,9 +80,9 @@ func (pg Pgsql) GetAwaitingSchedules(ctx context.Context) ([]*Schedule, error) {
 				s.retry_policy_interval, s.transport_type, s.url, s.last_execution_date, s.next_execution_date, j.id, j.slug, j.data
 			FROM jobs AS j 
 			JOIN schedules AS s ON s.id = j.schedule_id
-			WHERE status IN ($1, $2) AND next_execution_date <= $3`
+			WHERE status IN ($1) AND next_execution_date <= $2`
 
-	rows, err := pg.pool.Query(ctx, sql, Waiting, Failed, time.Now())
+	rows, err := pg.pool.Query(ctx, sql, Waiting, time.Now())
 
 	if err != nil {
 		return nil, err
