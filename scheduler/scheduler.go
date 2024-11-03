@@ -3,13 +3,10 @@ package scheduler
 import (
 	"context"
 	"encoding/json"
-	"io"
-	"net/http"
 	"time"
 	log "timely/logger"
 
 	"github.com/google/uuid"
-	"github.com/gorilla/mux"
 )
 
 type Scheduler struct {
@@ -53,15 +50,14 @@ const SchedulerTickDelay = time.Second
 func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTransportDriver,
 	syncTransport SyncTransportDriver) *Scheduler {
 
-	schedulerId := uuid.New()
 	scheduler := Scheduler{
-		Id:             schedulerId,
+		Id:             uuid.New(),
 		Storage:        storage,
 		AsyncTransport: asyncTransport,
 		SyncTransport:  syncTransport,
 	}
 
-	log.Logger.Printf("starting scheduler with id %s\n", schedulerId)
+	log.Logger.Printf("starting scheduler with id %s\n", scheduler.Id)
 
 	err := createAsyncTransportDependencies(asyncTransport)
 	if err != nil {
@@ -71,12 +67,8 @@ func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTrans
 
 	go processJobEvents(ctx, storage, asyncTransport)
 	go func(storage StorageDriver, asyncTransport AsyncTransportDriver) {
-		tickResult := make(chan error)
-
 		for {
-			go processTick(ctx, storage, asyncTransport, syncTransport, tickResult)
-
-			err = <-tickResult
+			err := processTick(ctx, storage, asyncTransport, syncTransport)
 			if err != nil {
 				log.Logger.Printf("processing scheduler tick error - %v", err)
 			}
@@ -86,24 +78,6 @@ func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTrans
 	}(storage, asyncTransport)
 
 	return &scheduler
-}
-
-func (s *Scheduler) ListenForJobEvents(ctx context.Context, r *mux.Router) {
-	r.HandleFunc("/schedules/status", func(w http.ResponseWriter, r *http.Request) {
-		payload, err := io.ReadAll(r.Body)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		err = handleJobEvent(ctx, payload, s.Storage)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		w.WriteHeader(http.StatusAccepted)
-	})
 }
 
 func createAsyncTransportDependencies(transport AsyncTransportDriver) error {
@@ -132,12 +106,11 @@ func createAsyncTransportDependencies(transport AsyncTransportDriver) error {
 }
 
 func processTick(ctx context.Context, storage StorageDriver, asyncTransport AsyncTransportDriver,
-	syncTransport SyncTransportDriver, tickResult chan<- error) {
+	syncTransport SyncTransportDriver) error {
 
 	schedules, err := getSchedulesReadyToStart(ctx, storage)
 	if err != nil {
-		tickResult <- err
-		return
+		return err
 	}
 
 	for _, schedule := range schedules {
@@ -148,8 +121,7 @@ func processTick(ctx context.Context, storage StorageDriver, asyncTransport Asyn
 		err = storage.AddJobRun(ctx, jobRun)
 		if err != nil {
 			log.Logger.Printf("error adding job run - %v\n", err)
-			tickResult <- err
-			return
+			return err
 		}
 
 		schedule.Start()
@@ -171,8 +143,7 @@ func processTick(ctx context.Context, storage StorageDriver, asyncTransport Asyn
 			{
 				err = asyncTransport.BindQueue(schedule.Job.Slug, string(ExchangeJobSchedule), schedule.Job.Slug)
 				if err != nil {
-					tickResult <- err
-					return
+					return err
 				}
 
 				err = asyncTransport.Publish(string(ExchangeJobSchedule), schedule.Job.Slug,
@@ -188,21 +159,19 @@ func processTick(ctx context.Context, storage StorageDriver, asyncTransport Asyn
 
 		if err != nil {
 			log.Logger.Printf("failed to start job %v", err)
-			tickResult <- err
-			return
+			return err
 		}
 
 		err = storage.UpdateSchedule(ctx, *schedule)
 		if err != nil {
 			log.Logger.Printf("error updating schedule status - %v\n", err)
-			tickResult <- err
-			return
+			return err
 		}
 
 		log.Logger.Printf("scheduled job %s/%s, run %s", schedule.Job.Id, schedule.Job.Slug, jobRun.Id)
 	}
 
-	tickResult <- nil
+	return nil
 }
 
 func getSchedulesReadyToStart(ctx context.Context, storage StorageDriver) ([]*Schedule, error) {
@@ -216,7 +185,7 @@ func getSchedulesReadyToStart(ctx context.Context, storage StorageDriver) ([]*Sc
 
 func processJobEvents(ctx context.Context, storage StorageDriver, asyncTransport AsyncTransportDriver) {
 	err := asyncTransport.Subscribe(string(QueueJobStatus), func(message []byte) error {
-		return handleJobEvent(ctx, message, storage)
+		return HandleJobEvent(ctx, message, storage)
 	})
 
 	if err != nil {
@@ -225,7 +194,7 @@ func processJobEvents(ctx context.Context, storage StorageDriver, asyncTransport
 	}
 }
 
-func handleJobEvent(ctx context.Context, message []byte, storage StorageDriver) error {
+func HandleJobEvent(ctx context.Context, message []byte, storage StorageDriver) error {
 	jobStatus := JobStatusEvent{}
 	err := json.Unmarshal(message, &jobStatus)
 	if err != nil {

@@ -45,7 +45,6 @@ func main() {
 	}
 
 	registerApiRoutes(r, app)
-	app.Scheduler.ListenForJobEvents(ctx, r)
 
 	log.Logger.Printf("listening on %v", srv.Addr)
 	if err := srv.ListenAndServe(); err != nil {

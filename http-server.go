@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/url"
 	"time"
@@ -22,6 +23,8 @@ func registerApiRoutes(router *mux.Router, app *Application) {
 	getSchedules(v1, app)
 	deleteSchedule(v1, app)
 	deleteSchedules(v1, app)
+
+	processJobEvent(v1, app)
 }
 
 func createSchedule(v1 *mux.Router, app *Application) {
@@ -196,6 +199,24 @@ func deleteSchedules(v1 *mux.Router, app *Application) {
 
 		noContent(w)
 	}).Methods("DELETE")
+}
+
+func processJobEvent(v1 *mux.Router, app *Application) {
+	v1.HandleFunc("/schedules/status", func(w http.ResponseWriter, req *http.Request) {
+		payload, err := io.ReadAll(req.Body)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		err = scheduler.HandleJobEvent(req.Context(), payload, app.Scheduler.Storage)
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		w.WriteHeader(http.StatusAccepted)
+	})
 }
 
 func ok(w http.ResponseWriter, data any) {
