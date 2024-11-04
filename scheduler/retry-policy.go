@@ -50,11 +50,11 @@ func (rp RetryPolicy) GetNextExecutionTime(executionDate time.Time, attempt int)
 		return time.Time{}, errors.New("invalid interval")
 	}
 
-	// maximum policy count reached
 	if attempt > rp.Count {
 		return time.Time{}, nil
 	}
 
+	// TODO: handle all strategies
 	switch rp.Strategy {
 	case Constant:
 		{

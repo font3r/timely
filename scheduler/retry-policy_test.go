@@ -4,7 +4,7 @@ import (
 	"testing"
 )
 
-func TestRetryPolicyCreate(t *testing.T) {
+func TestNewRetryPolicy(t *testing.T) {
 	tests := map[string]struct {
 		strategy StrategyType
 		count    int

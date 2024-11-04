@@ -46,9 +46,10 @@ type ScheduleConfiguration struct {
 }
 
 func NewSchedule(description, frequency, slug string, data *map[string]any,
-	policy RetryPolicy, configuration ScheduleConfiguration, scheduleStart *time.Time) Schedule {
+	policy RetryPolicy, configuration ScheduleConfiguration, scheduleStart *time.Time,
+	time func() time.Time) Schedule {
 
-	execution := getFirstExecutionTime(frequency, scheduleStart)
+	execution := getFirstExecutionTime(frequency, scheduleStart, time)
 
 	return Schedule{
 		Id:                uuid.New(),
@@ -64,14 +65,14 @@ func NewSchedule(description, frequency, slug string, data *map[string]any,
 	}
 }
 
-func (s *Schedule) Start() {
+func (s *Schedule) Start(timeFunc func() time.Time) {
 	s.Status = Scheduled
-	now := time.Now().Round(time.Second)
+	now := timeFunc().Round(time.Second)
 	s.LastExecutionDate = &now
 }
 
-func (s *Schedule) Succeed() {
-	nextExec := getNextExecutionTime(s.Frequency)
+func (s *Schedule) Succeed(timeFunc func() time.Time) {
+	nextExec := getNextExecutionTime(s.Frequency, timeFunc)
 
 	if nextExec == (time.Time{}) {
 		s.NextExecutionDate = nil
@@ -82,9 +83,9 @@ func (s *Schedule) Succeed() {
 	}
 }
 
-func (s *Schedule) Failed(attempt int) error {
+func (s *Schedule) Failed(attempt int, timeFunc func() time.Time) error {
 	if s.RetryPolicy == (RetryPolicy{}) {
-		nextExec := getNextExecutionTime(s.Frequency)
+		nextExec := getNextExecutionTime(s.Frequency, timeFunc)
 		if nextExec == (time.Time{}) {
 			s.NextExecutionDate = nil
 			s.Status = Finished
@@ -100,7 +101,7 @@ func (s *Schedule) Failed(attempt int) error {
 	if s.NextExecutionDate != nil {
 		next, err = s.RetryPolicy.GetNextExecutionTime(*s.NextExecutionDate, attempt)
 	} else {
-		next, err = s.RetryPolicy.GetNextExecutionTime(time.Now(), attempt)
+		next, err = s.RetryPolicy.GetNextExecutionTime(timeFunc(), attempt)
 	}
 
 	if err != nil {
@@ -115,7 +116,7 @@ func (s *Schedule) Failed(attempt int) error {
 		return nil
 	}
 
-	nextExec := getNextExecutionTime(s.Frequency)
+	nextExec := getNextExecutionTime(s.Frequency, timeFunc)
 	if nextExec == (time.Time{}) {
 		s.NextExecutionDate = nil
 		s.Status = Finished
@@ -127,27 +128,27 @@ func (s *Schedule) Failed(attempt int) error {
 	return nil
 }
 
-func getFirstExecutionTime(frequency string, scheduleStart *time.Time) time.Time {
+func getFirstExecutionTime(frequency string, scheduleStart *time.Time, timeFunc func() time.Time) time.Time {
 	if scheduleStart != nil {
 		return *scheduleStart
 	}
 
 	if frequency == string(Once) {
-		return time.Now().Round(time.Second)
+		return timeFunc().Round(time.Second)
 	}
 
 	sch, _ := CronParser.Parse(frequency)
 
-	return sch.Next(time.Now().Round(time.Second))
+	return sch.Next(timeFunc().Round(time.Second))
 }
 
-func getNextExecutionTime(frequency string) time.Time {
+func getNextExecutionTime(frequency string, timeFunc func() time.Time) time.Time {
 	if frequency == string(Once) {
 		return time.Time{}
 	}
 
 	sch, _ := CronParser.Parse(frequency)
-	nextExec := sch.Next(time.Now().Round(time.Second))
+	nextExec := sch.Next(timeFunc().Round(time.Second))
 
 	return nextExec
 }

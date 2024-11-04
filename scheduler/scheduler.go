@@ -125,7 +125,7 @@ func processTick(ctx context.Context, storage StorageDriver, asyncTransport Asyn
 			return err
 		}
 
-		schedule.Start()
+		schedule.Start(time.Now)
 
 		switch schedule.Configuration.TransportType {
 		case Http:
@@ -235,7 +235,7 @@ func HandleJobEvent(ctx context.Context, message []byte, storage StorageDriver) 
 		onJobFailed(schedule, jobRun, jobStatus, len(groupRuns))
 	case string(JobSucceed):
 		jobRun.Succeed()
-		schedule.Succeed() // TODO: after one time schedules we have to clean some transport methods eg. rabbit
+		schedule.Succeed(time.Now) // TODO: after one time schedules we have to clean some transport methods eg. rabbit
 	}
 
 	err = storage.UpdateJobRun(ctx, *jobRun)
@@ -253,7 +253,7 @@ func HandleJobEvent(ctx context.Context, message []byte, storage StorageDriver) 
 
 func onJobFailed(schedule *Schedule, jobRun *JobRun, jobStatus JobStatusEvent, attempt int) error {
 	jobRun.Failed(jobStatus.Reason)
-	if err := schedule.Failed(attempt); err != nil {
+	if err := schedule.Failed(attempt, time.Now); err != nil {
 		return err
 	}
 

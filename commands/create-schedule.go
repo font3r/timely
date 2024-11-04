@@ -56,7 +56,7 @@ func (h CreateScheduleHandler) Handle(ctx context.Context, c CreateScheduleComma
 		c.Job.Data, retryPolicy, scheduler.ScheduleConfiguration{
 			TransportType: c.Configuration.TransportType,
 			Url:           c.Configuration.Url},
-		c.ScheduleStart)
+		c.ScheduleStart, time.Now)
 
 	if err = h.Storage.Add(ctx, schedule); err != nil {
 		return nil, err
