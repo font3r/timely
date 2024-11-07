@@ -232,10 +232,15 @@ func HandleJobEvent(ctx context.Context, message []byte, storage StorageDriver) 
 
 	switch jobStatus.Status {
 	case string(JobFailed):
-		onJobFailed(schedule, jobRun, jobStatus, len(groupRuns))
+		{
+			jobRun.Failed(jobStatus.Reason)
+			schedule.Failed(len(groupRuns), time.Now)
+		}
 	case string(JobSucceed):
-		jobRun.Succeed()
-		schedule.Succeed(time.Now) // TODO: after one time schedules we have to clean some transport methods eg. rabbit
+		{
+			jobRun.Succeed()
+			schedule.Succeed(time.Now) // TODO: after one time schedules we have to clean some transport methods eg. rabbit
+		}
 	}
 
 	err = storage.UpdateJobRun(ctx, *jobRun)
@@ -245,15 +250,6 @@ func HandleJobEvent(ctx context.Context, message []byte, storage StorageDriver) 
 
 	err = storage.UpdateSchedule(ctx, *schedule)
 	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func onJobFailed(schedule *Schedule, jobRun *JobRun, jobStatus JobStatusEvent, attempt int) error {
-	jobRun.Failed(jobStatus.Reason)
-	if err := schedule.Failed(attempt, time.Now); err != nil {
 		return err
 	}
 

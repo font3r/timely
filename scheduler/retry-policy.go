@@ -44,23 +44,19 @@ func NewRetryPolicy(strategyType StrategyType, count int, interval string) (Retr
 	}, nil
 }
 
-func (rp RetryPolicy) GetNextExecutionTime(executionDate time.Time, attempt int) (time.Time, error) {
-	d, err := time.ParseDuration(rp.Interval)
-	if err != nil {
-		return time.Time{}, errors.New("invalid interval")
-	}
-
+func (rp RetryPolicy) GetNextExecutionTime(executionDate time.Time, attempt int) time.Time {
+	d, _ := time.ParseDuration(rp.Interval)
 	if attempt > rp.Count {
-		return time.Time{}, nil
+		return time.Time{}
 	}
 
 	// TODO: handle all strategies
 	switch rp.Strategy {
 	case Constant:
 		{
-			return executionDate.Add(d), nil
+			return executionDate.Add(d)
 		}
 	}
 
-	return time.Now().Round(time.Second), nil
+	return time.Now().Round(time.Second)
 }

@@ -72,60 +72,38 @@ func (s *Schedule) Start(timeFunc func() time.Time) {
 }
 
 func (s *Schedule) Succeed(timeFunc func() time.Time) {
-	nextExec := getNextExecutionTime(s.Frequency, timeFunc)
+	nextExecAt := getNextExecutionTime(s.Frequency, timeFunc)
 
-	if nextExec == (time.Time{}) {
+	if nextExecAt == (time.Time{}) {
 		s.NextExecutionDate = nil
 		s.Status = Finished
 	} else {
-		s.NextExecutionDate = &nextExec
+		s.NextExecutionDate = &nextExecAt
 		s.Status = Waiting
 	}
 }
 
-func (s *Schedule) Failed(attempt int, timeFunc func() time.Time) error {
-	if s.RetryPolicy == (RetryPolicy{}) {
-		nextExec := getNextExecutionTime(s.Frequency, timeFunc)
-		if nextExec == (time.Time{}) {
-			s.NextExecutionDate = nil
-			s.Status = Finished
-		} else {
-			s.NextExecutionDate = &nextExec
+func (s *Schedule) Failed(attempt int, timeFunc func() time.Time) {
+	if s.RetryPolicy != (RetryPolicy{}) {
+		retryAt := s.RetryPolicy.GetNextExecutionTime(timeFunc(), attempt)
+
+		if retryAt != (time.Time{}) {
+			s.NextExecutionDate = &retryAt
 			s.Status = Waiting
+			log.Logger.Printf("schedule retrying at %v\n", retryAt)
+
+			return
 		}
 	}
 
-	var next time.Time
-	var err error
-
-	if s.NextExecutionDate != nil {
-		next, err = s.RetryPolicy.GetNextExecutionTime(*s.NextExecutionDate, attempt)
-	} else {
-		next, err = s.RetryPolicy.GetNextExecutionTime(timeFunc(), attempt)
-	}
-
-	if err != nil {
-		return err
-	}
-
-	if next != (time.Time{}) {
-		s.NextExecutionDate = &next
-		s.Status = Waiting
-		log.Logger.Printf("schedule retrying at %v\n", next)
-
-		return nil
-	}
-
-	nextExec := getNextExecutionTime(s.Frequency, timeFunc)
-	if nextExec == (time.Time{}) {
+	nextExecAt := getNextExecutionTime(s.Frequency, timeFunc)
+	if nextExecAt == (time.Time{}) {
 		s.NextExecutionDate = nil
 		s.Status = Finished
 	} else {
-		s.NextExecutionDate = &nextExec
+		s.NextExecutionDate = &nextExecAt
 		s.Status = Waiting
 	}
-
-	return nil
 }
 
 func getFirstExecutionTime(frequency string, scheduleStart *time.Time, timeFunc func() time.Time) time.Time {

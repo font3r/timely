@@ -62,7 +62,7 @@ func TestNewScheduleWithSpecifiedScheduleStart(t *testing.T) {
 	s := NewSchedule("", "", "", nil, RetryPolicy{}, ScheduleConfiguration{}, &scheduleStart, getFakeDate)
 
 	if *s.NextExecutionDate != scheduleStart {
-		t.Errorf("expect result %+v, got %+v", scheduleStart, s.NextExecutionDate)
+		t.Errorf("expect result %+v, got %+v", scheduleStart, *s.NextExecutionDate)
 	}
 }
 
@@ -72,7 +72,7 @@ func TestNewScheduleWithOnceFrequency(t *testing.T) {
 	expected := getFakeDate().Round(time.Second)
 
 	if *s.NextExecutionDate != expected {
-		t.Errorf("expect result %+v, got %+v", expected, s.NextExecutionDate)
+		t.Errorf("expect result %+v, got %+v", expected, *s.NextExecutionDate)
 	}
 }
 
@@ -82,7 +82,99 @@ func TestNewScheduleWithCronFrequency(t *testing.T) {
 	expected := getFakeDate().Add(time.Second * 10).Round(time.Second)
 
 	if *s.NextExecutionDate != expected {
-		t.Errorf("expect result %+v, got %+v", expected, s.NextExecutionDate)
+		t.Errorf("expect result %+v, got %+v", expected, *s.NextExecutionDate)
+	}
+}
+
+func TestSucceedWithoutNextExecution(t *testing.T) {
+	s := NewSchedule("", "once", "", nil, RetryPolicy{}, ScheduleConfiguration{}, nil, getFakeDate)
+
+	s.Succeed(getFakeDate)
+
+	if s.NextExecutionDate != nil {
+		t.Errorf("expect result %+v, got %+v", nil, *s.NextExecutionDate)
+	}
+
+	if s.Status != Finished {
+		t.Errorf("expect result %+v, got %+v", Finished, s.Status)
+	}
+}
+
+func TestSucceedWithValidNextExecution(t *testing.T) {
+	s := NewSchedule("", "*/10 * * * * *", "", nil, RetryPolicy{}, ScheduleConfiguration{}, nil, getFakeDate)
+
+	s.Succeed(getFakeDate)
+
+	expected := getFakeDate().Add(time.Second * 10).Round(time.Second)
+
+	if *s.NextExecutionDate != expected {
+		t.Errorf("expect result %+v, got %+v", expected, *s.NextExecutionDate)
+	}
+
+	if s.Status != Waiting {
+		t.Errorf("expect result %+v, got %+v", Waiting, s.Status)
+	}
+}
+
+func TestFailedWithRetryPolicyWithPossibleRetryDate(t *testing.T) {
+	rp, _ := NewRetryPolicy(Constant, 3, "15s")
+	s := NewSchedule("", "once", "", nil, rp, ScheduleConfiguration{}, nil, getFakeDate)
+
+	s.Failed(2, getFakeDate)
+
+	expected := getFakeDate().Add(time.Second * 15).Round(time.Second)
+
+	if *s.NextExecutionDate != expected {
+		t.Errorf("expect result %+v, got %+v", expected, *s.NextExecutionDate)
+	}
+
+	if s.Status != Waiting {
+		t.Errorf("expect result %+v, got %+v", Waiting, s.Status)
+	}
+}
+
+func TestFailedWithRetryPolicyWithoutPossibleRetryDate(t *testing.T) {
+	rp, _ := NewRetryPolicy(Constant, 3, "1s")
+	s := NewSchedule("", "once", "", nil, rp, ScheduleConfiguration{}, nil, getFakeDate)
+
+	s.Failed(100, getFakeDate)
+
+	if s.NextExecutionDate != nil {
+		t.Errorf("expect result %+v, got %+v", nil, *s.NextExecutionDate)
+	}
+
+	if s.Status != Finished {
+		t.Errorf("expect result %+v, got %+v", Finished, s.Status)
+	}
+}
+
+func TestFailedWithoutRetryPolicyWithoutNextExecutionTime(t *testing.T) {
+	s := NewSchedule("", "once", "", nil, RetryPolicy{}, ScheduleConfiguration{}, nil, getFakeDate)
+
+	s.Failed(1, getFakeDate)
+
+	if s.NextExecutionDate != nil {
+		t.Errorf("expect result %+v, got %+v", nil, *s.NextExecutionDate)
+	}
+
+	if s.Status != Finished {
+		t.Errorf("expect result %+v, got %+v", Finished, s.Status)
+	}
+}
+
+func TestFailedWithoutRetryPolicyWithNextExecutionTime(t *testing.T) {
+	s := NewSchedule("", "*/10 * * * * *", "", nil, RetryPolicy{}, ScheduleConfiguration{}, nil, getFakeDate)
+
+	s.Failed(1, getFakeDate)
+
+	expected := getFakeDate().Add(time.Second * 10).Round(time.Second)
+
+	if *s.NextExecutionDate != expected {
+		t.Errorf("expect result %+v, got %+v", expected, *s.NextExecutionDate)
+	}
+
+	if s.Status != Waiting {
+		t.Errorf("expect result %+v, got %+v", Waiting, s.Status)
 	}
 }
 
