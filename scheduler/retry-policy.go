@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -50,13 +51,13 @@ func (rp RetryPolicy) GetNextExecutionTime(executionDate time.Time, attempt int)
 		return time.Time{}
 	}
 
-	// TODO: handle all strategies
 	switch rp.Strategy {
 	case Constant:
 		{
 			return executionDate.Add(d)
 		}
+	default:
+		// TODO: handle all strategies
+		panic(fmt.Errorf("TODO: handle all strategies, missing %v", rp.Strategy))
 	}
-
-	return time.Now().Round(time.Second)
 }

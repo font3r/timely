@@ -66,9 +66,9 @@ func NewSchedule(description, frequency, slug string, data *map[string]any,
 }
 
 func (s *Schedule) Start(timeFunc func() time.Time) {
-	s.Status = Scheduled
 	now := timeFunc().Round(time.Second)
 	s.LastExecutionDate = &now
+	s.Status = Scheduled
 }
 
 func (s *Schedule) Succeed(timeFunc func() time.Time) {

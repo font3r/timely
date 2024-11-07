@@ -57,9 +57,24 @@ func TestNewSchedule(t *testing.T) {
 	}
 }
 
+func TestStart(t *testing.T) {
+	s := NewSchedule("", "once", "", nil, RetryPolicy{}, ScheduleConfiguration{}, nil, getFakeDate)
+
+	s.Start(getFakeDate)
+
+	expected := getFakeDate().Round(time.Second)
+	if *s.LastExecutionDate != expected {
+		t.Errorf("expect result %+v, got %+v", expected, *s.LastExecutionDate)
+	}
+
+	if s.Status != Scheduled {
+		t.Errorf("expect result %+v, got %+v", Scheduled, s.Status)
+	}
+}
+
 func TestNewScheduleWithSpecifiedScheduleStart(t *testing.T) {
 	scheduleStart := getFakeDate()
-	s := NewSchedule("", "", "", nil, RetryPolicy{}, ScheduleConfiguration{}, &scheduleStart, getFakeDate)
+	s := NewSchedule("", "once", "", nil, RetryPolicy{}, ScheduleConfiguration{}, &scheduleStart, getFakeDate)
 
 	if *s.NextExecutionDate != scheduleStart {
 		t.Errorf("expect result %+v, got %+v", scheduleStart, *s.NextExecutionDate)
