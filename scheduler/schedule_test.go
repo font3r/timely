@@ -38,7 +38,6 @@ func TestNewSchedule(t *testing.T) {
 
 	s := NewSchedule("description", "once", "slug", nil, rp, sc, nil, getFakeDate)
 
-	// fill test
 	expected.Id = s.Id
 	expected.GroupId = s.GroupId
 	expected.Job.Id = s.Job.Id
@@ -47,6 +46,11 @@ func TestNewSchedule(t *testing.T) {
 		t.Errorf("expect result %+v, got %+v", expected.Job, s.Job)
 	}
 
+	if *expected.NextExecutionDate != *s.NextExecutionDate {
+		t.Errorf("expect result %+v, got %+v", *expected.NextExecutionDate, *s.NextExecutionDate)
+	}
+
+	expected.NextExecutionDate = s.NextExecutionDate
 	expected.Job = s.Job
 	if s != expected {
 		t.Errorf("expect result %+v, got %+v", expected, s)
