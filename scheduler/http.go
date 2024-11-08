@@ -31,6 +31,7 @@ var InvalidScheduleStartResponse = Error{
 	Msg:  "invalid http response"}
 
 // TODO: Authorization, maybe with secret as header created during job registration
+// Probably we should merge jobs for client and specify secret during client creation
 func (ht HttpTransport) Start(ctx context.Context, url string, request ScheduleJobRequest) error {
 	body, err := json.Marshal(request)
 	if err != nil {
