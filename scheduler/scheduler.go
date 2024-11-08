@@ -115,7 +115,7 @@ func processTick(ctx context.Context, storage StorageDriver, asyncTransport Asyn
 	}
 
 	for _, schedule := range schedules {
-		jobRun := NewJobRun(schedule.Id, schedule.GroupId)
+		jobRun := NewJobRun(schedule.Id, schedule.GroupId, time.Now)
 
 		// TODO: starting schedule should be transactional so outbox is most likely needed for async transport
 		// Job run has to be created before starting job because we can hit race condition with job statuses
@@ -233,12 +233,12 @@ func HandleJobEvent(ctx context.Context, message []byte, storage StorageDriver) 
 	switch jobStatus.Status {
 	case string(JobFailed):
 		{
-			jobRun.Failed(jobStatus.Reason)
+			jobRun.Failed(jobStatus.Reason, time.Now)
 			schedule.Failed(len(groupRuns), time.Now)
 		}
 	case string(JobSucceed):
 		{
-			jobRun.Succeed()
+			jobRun.Succeed(time.Now)
 			schedule.Succeed(time.Now) // TODO: after one time schedules we have to clean some transport methods eg. rabbit
 		}
 	}

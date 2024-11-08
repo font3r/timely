@@ -65,14 +65,14 @@ func NewSchedule(description, frequency, slug string, data *map[string]any,
 	}
 }
 
-func (s *Schedule) Start(timeFunc func() time.Time) {
-	now := timeFunc().Round(time.Second)
-	s.LastExecutionDate = &now
+func (s *Schedule) Start(now func() time.Time) {
+	lastExecAt := now().Round(time.Second)
+	s.LastExecutionDate = &lastExecAt
 	s.Status = Scheduled
 }
 
-func (s *Schedule) Succeed(timeFunc func() time.Time) {
-	nextExecAt := getNextExecutionTime(s.Frequency, timeFunc)
+func (s *Schedule) Succeed(now func() time.Time) {
+	nextExecAt := getNextExecutionTime(s.Frequency, now)
 
 	if nextExecAt == (time.Time{}) {
 		s.NextExecutionDate = nil
@@ -83,9 +83,9 @@ func (s *Schedule) Succeed(timeFunc func() time.Time) {
 	}
 }
 
-func (s *Schedule) Failed(attempt int, timeFunc func() time.Time) {
+func (s *Schedule) Failed(attempt int, now func() time.Time) {
 	if s.RetryPolicy != (RetryPolicy{}) {
-		retryAt := s.RetryPolicy.GetNextExecutionTime(timeFunc(), attempt)
+		retryAt := s.RetryPolicy.GetNextExecutionTime(now(), attempt)
 
 		if retryAt != (time.Time{}) {
 			s.NextExecutionDate = &retryAt
@@ -96,7 +96,7 @@ func (s *Schedule) Failed(attempt int, timeFunc func() time.Time) {
 		}
 	}
 
-	nextExecAt := getNextExecutionTime(s.Frequency, timeFunc)
+	nextExecAt := getNextExecutionTime(s.Frequency, now)
 	if nextExecAt == (time.Time{}) {
 		s.NextExecutionDate = nil
 		s.Status = Finished
@@ -106,27 +106,27 @@ func (s *Schedule) Failed(attempt int, timeFunc func() time.Time) {
 	}
 }
 
-func getFirstExecutionTime(frequency string, scheduleStart *time.Time, timeFunc func() time.Time) time.Time {
+func getFirstExecutionTime(frequency string, scheduleStart *time.Time, now func() time.Time) time.Time {
 	if scheduleStart != nil {
 		return *scheduleStart
 	}
 
 	if frequency == string(Once) {
-		return timeFunc().Round(time.Second)
+		return now().Round(time.Second)
 	}
 
 	sch, _ := CronParser.Parse(frequency)
 
-	return sch.Next(timeFunc().Round(time.Second))
+	return sch.Next(now().Round(time.Second))
 }
 
-func getNextExecutionTime(frequency string, timeFunc func() time.Time) time.Time {
+func getNextExecutionTime(frequency string, now func() time.Time) time.Time {
 	if frequency == string(Once) {
 		return time.Time{}
 	}
 
 	sch, _ := CronParser.Parse(frequency)
-	nextExec := sch.Next(timeFunc().Round(time.Second))
+	nextExec := sch.Next(now().Round(time.Second))
 
 	return nextExec
 }

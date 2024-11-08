@@ -29,27 +29,27 @@ type JobRun struct {
 	EndDate    *time.Time
 }
 
-func NewJobRun(scheduleId uuid.UUID, groupId uuid.UUID) JobRun {
+func NewJobRun(scheduleId uuid.UUID, groupId uuid.UUID, now func() time.Time) JobRun {
 	return JobRun{
 		Id:         uuid.New(),
 		ScheduleId: scheduleId,
 		GroupId:    groupId,
 		Status:     JobWaiting,
 		Reason:     nil,
-		StartDate:  time.Now().Round(time.Second),
+		StartDate:  now().Round(time.Second),
 		EndDate:    nil,
 	}
 }
 
-func (jr *JobRun) Succeed() {
+func (jr *JobRun) Succeed(now func() time.Time) {
 	jr.Status = JobSucceed
-	end := time.Now().Round(time.Second)
+	end := now().Round(time.Second)
 	jr.EndDate = &end
 }
 
-func (jr *JobRun) Failed(reason string) {
+func (jr *JobRun) Failed(reason string, now func() time.Time) {
 	jr.Status = JobFailed
 	jr.Reason = &reason
-	end := time.Now().Round(time.Second)
+	end := now().Round(time.Second)
 	jr.EndDate = &end
 }
