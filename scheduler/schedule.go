@@ -10,7 +10,7 @@ import (
 type ScheduleStatus string
 
 const (
-	// new schedule waiting for start
+	// new schedule waiting for being scheduled
 	Waiting ScheduleStatus = "waiting"
 
 	// job scheduled, waiting for result

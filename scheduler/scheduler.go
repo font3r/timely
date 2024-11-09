@@ -21,7 +21,6 @@ type JobStatusEvent struct {
 	ScheduleId uuid.UUID `json:"schedule_id"`
 	GroupId    uuid.UUID `json:"group_id"`
 	JobRunId   uuid.UUID `json:"job_run_id"`
-	JobSlug    string    `json:"job_slug"`
 	Status     string    `json:"status"`
 	Reason     string    `json:"reason"`
 }
@@ -30,7 +29,6 @@ type ScheduleJobEvent struct {
 	ScheduleId uuid.UUID       `json:"schedule_id"`
 	GroupId    uuid.UUID       `json:"group_id"`
 	JobRunId   uuid.UUID       `json:"job_run_id"`
-	Job        string          `json:"job"`
 	Data       *map[string]any `json:"data"`
 }
 
@@ -152,7 +150,6 @@ func processTick(ctx context.Context, storage StorageDriver, asyncTransport Asyn
 						ScheduleId: schedule.Id,
 						GroupId:    jobRun.GroupId,
 						JobRunId:   jobRun.Id,
-						Job:        schedule.Job.Slug,
 						Data:       schedule.Job.Data,
 					})
 			}
@@ -186,7 +183,13 @@ func getSchedulesReadyToStart(ctx context.Context, storage StorageDriver) ([]*Sc
 
 func processJobEvents(ctx context.Context, storage StorageDriver, asyncTransport AsyncTransportDriver) {
 	err := asyncTransport.Subscribe(string(QueueJobStatus), func(message []byte) error {
-		return HandleJobEvent(ctx, message, storage)
+		err := HandleJobEvent(ctx, message, storage)
+		if err != nil {
+			log.Logger.Printf("error during job event processing - %v\n", err)
+			return err
+		}
+
+		return nil
 	})
 
 	if err != nil {
@@ -199,6 +202,7 @@ func HandleJobEvent(ctx context.Context, message []byte, storage StorageDriver) 
 	jobStatus := JobStatusEvent{}
 	err := json.Unmarshal(message, &jobStatus)
 	if err != nil {
+		log.Logger.Printf("received invalid job event  %+v", jobStatus)
 		return err
 	}
 

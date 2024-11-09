@@ -54,7 +54,7 @@ func (rp RetryPolicy) GetNextExecutionTime(executionDate time.Time, attempt int)
 	switch rp.Strategy {
 	case Constant:
 		{
-			return executionDate.Add(d)
+			return executionDate.Add(d).Round(time.Second)
 		}
 	default:
 		// TODO: handle all strategies
