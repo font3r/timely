@@ -78,6 +78,8 @@ var statusAddress = "http://localhost:5000/api/v1/schedules/status"
 
 func processSyncJob(event ScheduleJobEvent) {
 	for i := 0; i < 5; i++ {
+		time.Sleep(time.Second * (time.Duration(1)))
+
 		if jitterFail() { // random 10% failure rate for testing
 			jobFailed := JobStatusEvent{
 				ScheduleId: event.ScheduleId,
@@ -90,7 +92,7 @@ func processSyncJob(event ScheduleJobEvent) {
 			json, _ := json.Marshal(jobFailed)
 			_, err := http.Post(statusAddress, "application/json", bytes.NewBuffer(json))
 			if err != nil {
-				log.Logger.Println("received error on job processing event")
+				log.Logger.Printf("received error on send job processing event %v\n", err)
 				break
 			}
 
@@ -111,7 +113,10 @@ func processSyncJob(event ScheduleJobEvent) {
 	}
 
 	json, _ := json.Marshal(jobSuccess)
-	http.Post(statusAddress, "application/json", bytes.NewBuffer(json))
+	_, err := http.Post(statusAddress, "application/json", bytes.NewBuffer(json))
+	if err != nil {
+		log.Logger.Printf("received error on send job processing event %v\n", err)
+	}
 
 	log.Logger.Println("sent success event")
 }
@@ -209,5 +214,5 @@ func processMockJob(tra *scheduler.RabbitMqTransport, scheduleId, groupId, jobRu
 }
 
 func jitterFail() bool {
-	return rand.Intn(10) <= 10 // random 10% failure rate for testing
+	return rand.Intn(10) <= 0 // random 10% failure rate for testing
 }
