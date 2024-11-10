@@ -14,8 +14,8 @@ import (
 )
 
 type AsyncTransportDriver interface {
-	Publish(exchange, routingKey string, message any) error
-	Subscribe(queue string, handle func(message []byte) error) error
+	Publish(ctx context.Context, exchange, routingKey string, message any) error
+	Subscribe(ctx context.Context, queue string, handle func(message []byte) error) error
 	CreateQueue(queue string) error
 	CreateExchange(exchange string) error
 	BindQueue(queue, exchange, routingKey string) error
@@ -49,7 +49,7 @@ func NewRabbitMqTransportConnection(url string) (*RabbitMqTransport, error) {
 	return transport, nil
 }
 
-func (t *RabbitMqTransport) Publish(exchange, routingKey string, message any) error {
+func (t *RabbitMqTransport) Publish(ctx context.Context, exchange, routingKey string, message any) error {
 	data, err := json.Marshal(message)
 	if err != nil {
 		return errors.New("invalid message format")
@@ -62,7 +62,7 @@ func (t *RabbitMqTransport) Publish(exchange, routingKey string, message any) er
 		Body:         data,
 	}
 
-	err = t.channel.PublishWithContext(context.Background(), exchange,
+	err = t.channel.PublishWithContext(ctx, exchange,
 		routingKey, false, false, msg)
 
 	if err != nil {
@@ -73,16 +73,16 @@ func (t *RabbitMqTransport) Publish(exchange, routingKey string, message any) er
 	return nil
 }
 
-func (t *RabbitMqTransport) Subscribe(queue string, handle func(message []byte) error) error {
+func (t *RabbitMqTransport) Subscribe(ctx context.Context, queue string, handle func(message []byte) error) error {
 	err := t.CreateQueue(queue)
 	if err != nil {
 		return err
 	}
 
-	delivery, err := t.channel.ConsumeWithContext(context.Background(), queue, "", false,
+	delivery, err := t.channel.ConsumeWithContext(ctx, queue, "", false,
 		false, false, false, amqp.Table{})
 	if err != nil {
-		log.Logger.Printf("error during consumer - %v\n", err)
+		log.Logger.Printf("error during consume - %v\n", err)
 		return err
 	}
 

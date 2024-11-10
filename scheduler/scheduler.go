@@ -124,7 +124,33 @@ func (s *Scheduler) processTick(ctx context.Context) error {
 
 func (s *Scheduler) processSchedule(ctx context.Context, schedule *Schedule, wg *sync.WaitGroup) {
 	defer wg.Done()
+	schedule.Start(time.Now)
 	jobRun := NewJobRun(schedule.Id, schedule.GroupId, time.Now)
+
+	var schueduleStartErr error
+	switch schedule.Configuration.TransportType {
+	case Http:
+		schueduleStartErr = s.handleHttp(ctx, schedule, &jobRun)
+	case Rabbitmq:
+		schueduleStartErr = s.handleRabbitMq(ctx, schedule, &jobRun)
+	}
+
+	if schueduleStartErr != nil {
+		log.Logger.Printf("failed to start job - %v", schueduleStartErr)
+		groupRuns, innerErr := s.Storage.GetJobRunGroup(ctx, schedule.Id, jobRun.GroupId)
+		if innerErr != nil {
+			log.Logger.Printf("error getting job run group - %v\n", innerErr)
+			jobRun.Failed(errors.Join(schueduleStartErr, innerErr).Error(), time.Now)
+			schedule.Failed(1, time.Now) // TODO: probably infinite loop
+		} else {
+			jobRun.Failed(schueduleStartErr.Error(), time.Now)
+			// len + 1 because current job run is not yet stored in persistent storage
+			schedule.Failed(len(groupRuns)+1, time.Now)
+		}
+
+	} else {
+		log.Logger.Printf("scheduled job %s/%s, run %s", schedule.Job.Id, schedule.Job.Slug, jobRun.Id)
+	}
 
 	// TODO: starting schedule should be transactional so outbox is most likely needed for async transport
 	// Job run has to be created before starting job because we can hit race condition with job statuses
@@ -134,53 +160,53 @@ func (s *Scheduler) processSchedule(ctx context.Context, schedule *Schedule, wg 
 		return
 	}
 
-	schedule.Start(time.Now)
-
-	switch schedule.Configuration.TransportType {
-	case Http:
-		{
-			s.SyncTransport.Start(ctx, schedule.Configuration.Url,
-				ScheduleJobRequest{
-					ScheduleId: schedule.Id,
-					GroupId:    jobRun.GroupId,
-					JobRunId:   jobRun.Id,
-					Job:        schedule.Job.Slug,
-					Data:       schedule.Job.Data,
-				})
-		}
-	case Rabbitmq:
-		{
-			err = s.AsyncTransport.BindQueue(schedule.Job.Slug, string(ExchangeJobSchedule), schedule.Job.Slug)
-			if err != nil {
-				return
-			}
-
-			err = s.AsyncTransport.Publish(string(ExchangeJobSchedule), schedule.Job.Slug,
-				ScheduleJobEvent{
-					ScheduleId: schedule.Id,
-					GroupId:    jobRun.GroupId,
-					JobRunId:   jobRun.Id,
-					Data:       schedule.Job.Data,
-				})
-		}
-	}
-
-	if err != nil {
-		log.Logger.Printf("failed to start job %v", err)
-		return
-	}
-
 	err = s.Storage.UpdateSchedule(ctx, *schedule)
 	if err != nil {
 		log.Logger.Printf("error updating schedule status - %v\n", err)
 		return
 	}
+}
 
-	log.Logger.Printf("scheduled job %s/%s, run %s", schedule.Job.Id, schedule.Job.Slug, jobRun.Id)
+func (s *Scheduler) handleHttp(ctx context.Context, schedule *Schedule, jobRun *JobRun) error {
+	err := s.SyncTransport.Start(ctx, schedule.Configuration.Url,
+		ScheduleJobRequest{
+			ScheduleId: schedule.Id,
+			GroupId:    jobRun.GroupId,
+			JobRunId:   jobRun.Id,
+			Job:        schedule.Job.Slug,
+			Data:       schedule.Job.Data,
+		})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *Scheduler) handleRabbitMq(ctx context.Context, schedule *Schedule, jobRun *JobRun) error {
+	err := s.AsyncTransport.BindQueue(schedule.Job.Slug, string(ExchangeJobSchedule), schedule.Job.Slug)
+	if err != nil {
+		return err
+	}
+
+	err = s.AsyncTransport.Publish(ctx, string(ExchangeJobSchedule), schedule.Job.Slug,
+		ScheduleJobEvent{
+			ScheduleId: schedule.Id,
+			GroupId:    jobRun.GroupId,
+			JobRunId:   jobRun.Id,
+			Data:       schedule.Job.Data,
+		})
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *Scheduler) processJobEvents(ctx context.Context) {
-	err := s.AsyncTransport.Subscribe(string(QueueJobStatus), func(message []byte) error {
+	err := s.AsyncTransport.Subscribe(ctx, string(QueueJobStatus), func(message []byte) error {
 		err := HandleJobEvent(ctx, message, s.Storage)
 		if err != nil {
 			log.Logger.Printf("error during job event processing - %v\n", err)
@@ -191,7 +217,7 @@ func (s *Scheduler) processJobEvents(ctx context.Context) {
 	})
 
 	if err != nil {
-		log.Logger.Printf("error during init process job events - %v\n", err)
+		log.Logger.Printf("error during subscribing to process job events - %v\n", err)
 		return
 	}
 }

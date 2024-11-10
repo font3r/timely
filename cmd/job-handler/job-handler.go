@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -132,7 +133,7 @@ func Start() {
 	for _, jobSlug := range []string{"process-user-notifications"} {
 		log.Logger.Printf("test app registered %s", jobSlug)
 		go func(jobSlug string) {
-			err = tra.Subscribe(jobSlug, func(message []byte) error {
+			err = tra.Subscribe(context.Background(), jobSlug, func(message []byte) error {
 				log.Logger.Printf("requested job start with slug %s", jobSlug)
 
 				var event ScheduleJobEvent
@@ -166,7 +167,7 @@ func Start() {
 func processMockJob(tra *scheduler.RabbitMqTransport, scheduleId, groupId, jobRunId uuid.UUID) error {
 	for i := 0; i < 5; i++ {
 		if jitterFail() { // random 10% failure rate for testing
-			err := tra.Publish(string(scheduler.ExchangeJobStatus),
+			err := tra.Publish(context.Background(), string(scheduler.ExchangeJobStatus),
 				string(scheduler.RoutingKeyJobStatus), JobStatusEvent{
 					ScheduleId: scheduleId,
 					GroupId:    groupId,
@@ -182,7 +183,7 @@ func processMockJob(tra *scheduler.RabbitMqTransport, scheduleId, groupId, jobRu
 			return errors.New("jitter job failure")
 		}
 
-		err := tra.Publish(string(scheduler.ExchangeJobStatus),
+		err := tra.Publish(context.Background(), string(scheduler.ExchangeJobStatus),
 			string(scheduler.RoutingKeyJobStatus), JobStatusEvent{
 				ScheduleId: scheduleId,
 				GroupId:    groupId,
@@ -197,7 +198,7 @@ func processMockJob(tra *scheduler.RabbitMqTransport, scheduleId, groupId, jobRu
 		time.Sleep(time.Second)
 	}
 
-	err := tra.Publish(string(scheduler.ExchangeJobStatus),
+	err := tra.Publish(context.Background(), string(scheduler.ExchangeJobStatus),
 		string(scheduler.RoutingKeyJobStatus), JobStatusEvent{
 			ScheduleId: scheduleId,
 			GroupId:    groupId,
