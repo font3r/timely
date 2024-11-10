@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"sync"
 	"time"
 	log "timely/logger"
 
@@ -58,16 +59,16 @@ func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTrans
 
 	log.Logger.Printf("starting scheduler with id %s\n", scheduler.Id)
 
-	err := createAsyncTransportDependencies(asyncTransport)
+	err := scheduler.createAsyncTransportDependencies()
 	if err != nil {
 		log.Logger.Printf("creating internal exchanges/queues error - %v", err)
 		return nil
 	}
 
-	go processJobEvents(ctx, storage, asyncTransport)
+	go scheduler.processJobEvents(ctx)
 	go func(storage StorageDriver, asyncTransport AsyncTransportDriver) {
 		for {
-			err := processTick(ctx, storage, asyncTransport, syncTransport)
+			err := scheduler.processTick(ctx)
 			if err != nil {
 				log.Logger.Printf("processing scheduler tick error - %v", err)
 			}
@@ -79,23 +80,23 @@ func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTrans
 	return &scheduler
 }
 
-func createAsyncTransportDependencies(transport AsyncTransportDriver) error {
-	err := transport.CreateExchange(string(ExchangeJobSchedule))
+func (s *Scheduler) createAsyncTransportDependencies() error {
+	err := s.AsyncTransport.CreateExchange(string(ExchangeJobSchedule))
 	if err != nil {
 		return nil
 	}
 
-	err = transport.CreateExchange(string(ExchangeJobStatus))
+	err = s.AsyncTransport.CreateExchange(string(ExchangeJobStatus))
 	if err != nil {
 		return err
 	}
 
-	err = transport.CreateQueue(string(QueueJobStatus))
+	err = s.AsyncTransport.CreateQueue(string(QueueJobStatus))
 	if err != nil {
 		return err
 	}
 
-	err = transport.BindQueue(string(QueueJobStatus), string(ExchangeJobStatus),
+	err = s.AsyncTransport.BindQueue(string(QueueJobStatus), string(ExchangeJobStatus),
 		string(RoutingKeyJobStatus))
 	if err != nil {
 		return err
@@ -104,86 +105,83 @@ func createAsyncTransportDependencies(transport AsyncTransportDriver) error {
 	return nil
 }
 
-func processTick(ctx context.Context, storage StorageDriver, asyncTransport AsyncTransportDriver,
-	syncTransport SyncTransportDriver) error {
-
-	schedules, err := getSchedulesReadyToStart(ctx, storage)
+func (s *Scheduler) processTick(ctx context.Context) error {
+	schedules, err := s.Storage.GetAwaitingSchedules(ctx)
 	if err != nil {
-		return err
+		return errors.Join(ErrFetchAwaitingSchedules, err)
 	}
 
+	wg := sync.WaitGroup{}
+	wg.Add(len(schedules)) // TODO: probably this should be limited
+	defer wg.Wait()
+
 	for _, schedule := range schedules {
-		jobRun := NewJobRun(schedule.Id, schedule.GroupId, time.Now)
-
-		// TODO: starting schedule should be transactional so outbox is most likely needed for async transport
-		// Job run has to be created before starting job because we can hit race condition with job statuses
-		err = storage.AddJobRun(ctx, jobRun)
-		if err != nil {
-			log.Logger.Printf("error adding job run - %v\n", err)
-			return err
-		}
-
-		schedule.Start(time.Now)
-
-		switch schedule.Configuration.TransportType {
-		case Http:
-			{
-				// TODO: such task have to be non-blocking to do not block tick but at the same time we have to wait to set schedule corectly
-				syncTransport.Start(ctx, schedule.Configuration.Url,
-					ScheduleJobRequest{
-						ScheduleId: schedule.Id,
-						GroupId:    jobRun.GroupId,
-						JobRunId:   jobRun.Id,
-						Job:        schedule.Job.Slug,
-						Data:       schedule.Job.Data,
-					})
-			}
-		case Rabbitmq:
-			{
-				err = asyncTransport.BindQueue(schedule.Job.Slug, string(ExchangeJobSchedule), schedule.Job.Slug)
-				if err != nil {
-					return err
-				}
-
-				err = asyncTransport.Publish(string(ExchangeJobSchedule), schedule.Job.Slug,
-					ScheduleJobEvent{
-						ScheduleId: schedule.Id,
-						GroupId:    jobRun.GroupId,
-						JobRunId:   jobRun.Id,
-						Data:       schedule.Job.Data,
-					})
-			}
-		}
-
-		if err != nil {
-			log.Logger.Printf("failed to start job %v", err)
-			return err
-		}
-
-		err = storage.UpdateSchedule(ctx, *schedule)
-		if err != nil {
-			log.Logger.Printf("error updating schedule status - %v\n", err)
-			return err
-		}
-
-		log.Logger.Printf("scheduled job %s/%s, run %s", schedule.Job.Id, schedule.Job.Slug, jobRun.Id)
+		go s.processSchedule(ctx, schedule, &wg)
 	}
 
 	return nil
 }
 
-func getSchedulesReadyToStart(ctx context.Context, storage StorageDriver) ([]*Schedule, error) {
-	awaitingSchedules, err := storage.GetAwaitingSchedules(ctx)
+func (s *Scheduler) processSchedule(ctx context.Context, schedule *Schedule, wg *sync.WaitGroup) {
+	defer wg.Done()
+	jobRun := NewJobRun(schedule.Id, schedule.GroupId, time.Now)
+
+	// TODO: starting schedule should be transactional so outbox is most likely needed for async transport
+	// Job run has to be created before starting job because we can hit race condition with job statuses
+	err := s.Storage.AddJobRun(ctx, jobRun)
 	if err != nil {
-		return nil, errors.Join(ErrFetchAwaitingSchedules, err)
+		log.Logger.Printf("error adding job run - %v\n", err)
+		return
 	}
 
-	return awaitingSchedules, nil
+	schedule.Start(time.Now)
+
+	switch schedule.Configuration.TransportType {
+	case Http:
+		{
+			s.SyncTransport.Start(ctx, schedule.Configuration.Url,
+				ScheduleJobRequest{
+					ScheduleId: schedule.Id,
+					GroupId:    jobRun.GroupId,
+					JobRunId:   jobRun.Id,
+					Job:        schedule.Job.Slug,
+					Data:       schedule.Job.Data,
+				})
+		}
+	case Rabbitmq:
+		{
+			err = s.AsyncTransport.BindQueue(schedule.Job.Slug, string(ExchangeJobSchedule), schedule.Job.Slug)
+			if err != nil {
+				return
+			}
+
+			err = s.AsyncTransport.Publish(string(ExchangeJobSchedule), schedule.Job.Slug,
+				ScheduleJobEvent{
+					ScheduleId: schedule.Id,
+					GroupId:    jobRun.GroupId,
+					JobRunId:   jobRun.Id,
+					Data:       schedule.Job.Data,
+				})
+		}
+	}
+
+	if err != nil {
+		log.Logger.Printf("failed to start job %v", err)
+		return
+	}
+
+	err = s.Storage.UpdateSchedule(ctx, *schedule)
+	if err != nil {
+		log.Logger.Printf("error updating schedule status - %v\n", err)
+		return
+	}
+
+	log.Logger.Printf("scheduled job %s/%s, run %s", schedule.Job.Id, schedule.Job.Slug, jobRun.Id)
 }
 
-func processJobEvents(ctx context.Context, storage StorageDriver, asyncTransport AsyncTransportDriver) {
-	err := asyncTransport.Subscribe(string(QueueJobStatus), func(message []byte) error {
-		err := HandleJobEvent(ctx, message, storage)
+func (s *Scheduler) processJobEvents(ctx context.Context) {
+	err := s.AsyncTransport.Subscribe(string(QueueJobStatus), func(message []byte) error {
+		err := HandleJobEvent(ctx, message, s.Storage)
 		if err != nil {
 			log.Logger.Printf("error during job event processing - %v\n", err)
 			return err
