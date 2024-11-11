@@ -8,9 +8,9 @@ import (
 	log "timely/logger"
 	"timely/scheduler"
 
-	"github.com/spf13/viper"
-
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
+	"github.com/spf13/viper"
 )
 
 type Application struct {
@@ -23,7 +23,7 @@ func main() {
 	r := mux.NewRouter()
 	srv := &http.Server{
 		Addr:    ":5000",
-		Handler: r,
+		Handler: handlers.CORS()(r),
 	}
 
 	ctx := context.Background()

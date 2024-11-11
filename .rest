@@ -14,7 +14,7 @@ POST {{baseAddress}}/api/v1/schedules
 Content-Type: application/json
 
 {
-    "description": "process user notifications test job description",
+    "description": "process user notifications",
     "frequency": "*/10 * * * * *",
     "job": {
         "slug": "process-user-notifications",
@@ -42,7 +42,7 @@ Content-Type: application/json
             "userId": "545753464587546"
         }
     },
-    "retry_policy": {
+    "retryPolicy": {
         "strategy": "constant",
         "interval": "10s",
         "count": 3
