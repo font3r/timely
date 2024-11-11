@@ -61,17 +61,17 @@ func main() {
 }
 
 type JobStatusEvent struct {
-	ScheduleId uuid.UUID `json:"schedule_id"`
-	GroupId    uuid.UUID `json:"group_id"`
-	JobRunId   uuid.UUID `json:"job_run_id"`
+	ScheduleId uuid.UUID `json:"scheduleId"`
+	GroupId    uuid.UUID `json:"groupId"`
+	JobRunId   uuid.UUID `json:"jobRunId"`
 	Status     string    `json:"status"`
 	Reason     string    `json:"reason"`
 }
 
 type ScheduleJobEvent struct {
-	ScheduleId uuid.UUID       `json:"schedule_id"`
-	GroupId    uuid.UUID       `json:"group_id"`
-	JobRunId   uuid.UUID       `json:"job_run_id"`
+	ScheduleId uuid.UUID       `json:"scheduleId"`
+	GroupId    uuid.UUID       `json:"groupId"`
+	JobRunId   uuid.UUID       `json:"jobRunId"`
 	Data       *map[string]any `json:"data"`
 }
 

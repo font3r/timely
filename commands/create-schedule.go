@@ -12,8 +12,8 @@ type CreateScheduleCommand struct {
 	Description   string                   `json:"description"`
 	Frequency     string                   `json:"frequency"`
 	Job           JobConfiguration         `json:"job"`
-	RetryPolicy   RetryPolicyConfiguration `json:"retry_policy"`
-	ScheduleStart *time.Time               `json:"schedule_start"`
+	RetryPolicy   RetryPolicyConfiguration `json:"retryPolicy"`
+	ScheduleStart *time.Time               `json:"scheduleStart"`
 	Configuration ScheduleConfiguration    `json:"configuration"`
 }
 

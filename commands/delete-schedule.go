@@ -2,8 +2,9 @@ package commands
 
 import (
 	"context"
-	"github.com/google/uuid"
 	"timely/scheduler"
+
+	"github.com/google/uuid"
 )
 
 type DeleteSchedule struct {

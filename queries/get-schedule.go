@@ -18,16 +18,16 @@ type GetScheduleHandler struct {
 
 type ScheduleDetailsDto struct {
 	Id                uuid.UUID                 `json:"id"`
-	GroupId           uuid.UUID                 `json:"group_id"`
+	GroupId           uuid.UUID                 `json:"groupId"`
 	Description       string                    `json:"description"`
 	Frequency         string                    `json:"frequency"`
 	Status            scheduler.ScheduleStatus  `json:"status"`
-	RetryPolicy       *RetryPolicyDto           `json:"retry_policy"`
-	LastExecutionDate *time.Time                `json:"last_execution_date"`
-	NextExecutionDate *time.Time                `json:"next_execution_date"`
+	RetryPolicy       *RetryPolicyDto           `json:"retryPolicy"`
+	LastExecutionDate *time.Time                `json:"lastExecutionDate"`
+	NextExecutionDate *time.Time                `json:"nextExecutionDate"`
 	Job               ScheduleDetailsJobDto     `json:"job"`
 	Configuration     ScheduleConfigurationDto  `json:"configuration"`
-	RecentJobRuns     map[uuid.UUID][]JobRunDto `json:"recent_job_runs"`
+	RecentJobRuns     map[uuid.UUID][]JobRunDto `json:"recentJobRuns"`
 }
 
 type RetryPolicyDto struct {
@@ -46,8 +46,8 @@ type JobRunDto struct {
 	Id        uuid.UUID              `json:"id"`
 	Status    scheduler.JobRunStatus `json:"status"`
 	Reason    *string                `json:"reason"`
-	StartDate time.Time              `json:"start_date"`
-	EndDate   *time.Time             `json:"end_date"`
+	StartDate time.Time              `json:"startDate"`
+	EndDate   *time.Time             `json:"endDate"`
 }
 
 type ScheduleConfigurationDto struct {

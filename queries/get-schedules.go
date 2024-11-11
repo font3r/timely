@@ -19,9 +19,9 @@ type ScheduleDto struct {
 	Description       string                   `json:"description"`
 	Frequency         string                   `json:"frequency"`
 	Status            scheduler.ScheduleStatus `json:"status"`
-	LastExecutionDate *time.Time               `json:"last_execution_date"`
-	NextExecutionDate *time.Time               `json:"next_execution_date"`
-	Job               JobDto                   `json:"job"`
+	LastExecutionDate *time.Time               `json:"lastExecutionDate"`
+	NextExecutionDate *time.Time               `json:"nextExecutionDate"`
+	JobSlug           string                   `json:"jobSlug"`
 }
 
 type JobDto struct {
@@ -46,10 +46,7 @@ func (h GetSchedulesHandler) Handle(ctx context.Context) ([]ScheduleDto, error) 
 			Status:            schedule.Status,
 			LastExecutionDate: schedule.LastExecutionDate,
 			NextExecutionDate: schedule.NextExecutionDate,
-			Job: JobDto{
-				Slug: schedule.Job.Slug,
-				Data: schedule.Job.Data,
-			},
+			JobSlug:           schedule.Job.Slug,
 		})
 	}
 
