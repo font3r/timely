@@ -6,9 +6,9 @@
     CONNECTION LIMIT = -1;
 
 --
-DROP TABLE job_runs;
-DROP TABLE jobs;
-DROP TABLE schedules;
+DROP TABLE IF EXISTS job_runs;
+DROP TABLE IF EXISTS jobs;
+DROP TABLE IF EXISTS schedules;
 
 CREATE TABLE IF NOT EXISTS schedules
 (

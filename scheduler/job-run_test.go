@@ -16,11 +16,11 @@ func TestNewRun(t *testing.T) {
 		ScheduleId: scheduleId,
 		Status:     JobWaiting,
 		Reason:     nil,
-		StartDate:  getFakeDate().Round(time.Second),
+		StartDate:  getStubDate().Round(time.Second),
 		EndDate:    nil,
 	}
 
-	jr := NewJobRun(scheduleId, groupId, getFakeDate)
+	jr := NewJobRun(scheduleId, groupId, getStubDate)
 
 	expected.Id = jr.Id
 
@@ -30,11 +30,11 @@ func TestNewRun(t *testing.T) {
 }
 
 func TestSucceed(t *testing.T) {
-	jr := NewJobRun(uuid.New(), uuid.New(), getFakeDate)
+	jr := NewJobRun(uuid.New(), uuid.New(), getStubDate)
 
-	jr.Succeed(getFakeDate)
+	jr.Succeed(getStubDate)
 
-	expected := getFakeDate().Round(time.Second)
+	expected := getStubDate().Round(time.Second)
 	if *jr.EndDate != expected {
 		t.Errorf("expect result %+v, got %+v", expected, *jr.EndDate)
 	}
@@ -45,11 +45,11 @@ func TestSucceed(t *testing.T) {
 }
 
 func TestFailed(t *testing.T) {
-	jr := NewJobRun(uuid.New(), uuid.New(), getFakeDate)
+	jr := NewJobRun(uuid.New(), uuid.New(), getStubDate)
 
-	jr.Failed("test fail reason", getFakeDate)
+	jr.Failed("test fail reason", getStubDate)
 
-	expected := getFakeDate().Round(time.Second)
+	expected := getStubDate().Round(time.Second)
 	if *jr.EndDate != expected {
 		t.Errorf("expect result %+v, got %+v", expected, *jr.EndDate)
 	}

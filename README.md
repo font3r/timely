@@ -20,3 +20,4 @@ TODO:
 - [ ] auth
 - [ ] admin panel
 - [ ] data retention
+- [ ] integration tests

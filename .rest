@@ -35,6 +35,7 @@ Content-Type: application/json
 
 {
     "description": "test job description",
+    "scheduleStart": "2024-11-20T23:00:00+01:00",
     "frequency": "once",
     "job": {
         "slug": "process-user-notifications",

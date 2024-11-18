@@ -66,7 +66,7 @@ func TestNewRetryPolicy(t *testing.T) {
 func TestGetNextExecutionPolicyAttemptsExceeded(t *testing.T) {
 	rp, _ := NewRetryPolicy(Constant, 5, "10s")
 
-	nextExecAt := rp.GetNextExecutionTime(getFakeDate(), 10)
+	nextExecAt := rp.GetNextExecutionTime(getStubDate(), 10)
 
 	if nextExecAt != (time.Time{}) {
 		t.Errorf("expect result %+v, got %+v", time.Time{}, nextExecAt)
@@ -77,8 +77,8 @@ func TestGetNextExecutionPolicy(t *testing.T) {
 	rp, _ := NewRetryPolicy(Constant, 5, "10s")
 
 	for i := 1; i <= rp.Count; i++ {
-		expected := getFakeDate().Add(time.Duration(10*i) * time.Second).Round(time.Second)
-		nextExecAt := rp.GetNextExecutionTime(getFakeDate().Add(time.Duration(10*(i-1))*time.Second), i)
+		expected := getStubDate().Add(time.Duration(10*i) * time.Second).Round(time.Second)
+		nextExecAt := rp.GetNextExecutionTime(getStubDate().Add(time.Duration(10*(i-1))*time.Second), i)
 
 		if nextExecAt != expected {
 			t.Errorf("expect result %+v, got %+v", expected, nextExecAt)
