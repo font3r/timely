@@ -12,7 +12,7 @@ import (
 
 func TestHttpSchedule(t *testing.T) {
 	ctx := context.Background()
-	wiremockCtr, err := startWiremock()
+	wiremockCtr, err := startWiremock(ctx)
 
 	if err != nil {
 		t.Fatal(err)
@@ -35,7 +35,7 @@ func TestHttpSchedule(t *testing.T) {
 		WillReturnResponse(
 			wiremock.NewResponse().
 				WithJSONBody(map[string]interface{}{
-					"code":   400,
+					"code":   http.StatusBadRequest,
 					"detail": "detail",
 				}).
 				WithHeader("Content-Type", "application/json").
@@ -47,14 +47,12 @@ func TestHttpSchedule(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if res.StatusCode != 400 {
+	if res.StatusCode != http.StatusBadRequest {
 		t.Fatalf("did not receive expected status code - received %s", res.Status)
 	}
 }
 
-func startWiremock() (*WireMockContainer, error) {
-	ctx := context.Background()
-
+func startWiremock(ctx context.Context) (*WireMockContainer, error) {
 	wiremockCtr, err := RunContainer(ctx, WithImage("wiremock/wiremock:3.9.2"))
 	if err != nil {
 		return nil, err
