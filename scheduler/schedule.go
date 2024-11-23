@@ -25,6 +25,7 @@ type Schedule struct {
 	GroupId           uuid.UUID
 	Description       string
 	Frequency         string
+	ScheduleStart     *time.Time
 	Status            ScheduleStatus
 	RetryPolicy       RetryPolicy
 	Configuration     ScheduleConfiguration
@@ -45,24 +46,24 @@ type ScheduleConfiguration struct {
 	Url           string
 }
 
-func NewSchedule(description, frequency, slug string, data *map[string]any,
-	policy RetryPolicy, configuration ScheduleConfiguration, scheduleStart *time.Time,
-	time func() time.Time) Schedule {
-
-	execution := getFirstExecutionTime(frequency, scheduleStart, time)
-
-	return Schedule{
+func NewSchedule(description, frequency string, time func() time.Time, opts ...ScheduleOption) Schedule {
+	s := Schedule{
 		Id:                uuid.New(),
 		GroupId:           uuid.New(),
 		Description:       description,
 		Frequency:         frequency,
 		Status:            Waiting,
-		RetryPolicy:       policy,
 		LastExecutionDate: nil,
-		NextExecutionDate: &execution,
-		Job:               NewJob(slug, data),
-		Configuration:     configuration,
 	}
+
+	for _, opt := range opts {
+		opt(&s)
+	}
+
+	execution := getFirstExecutionTime(s.Frequency, s.ScheduleStart, time)
+	s.NextExecutionDate = &execution
+
+	return s
 }
 
 func (s *Schedule) Start(now func() time.Time) {

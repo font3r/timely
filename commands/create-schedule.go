@@ -52,11 +52,11 @@ func (h CreateScheduleHandler) Handle(ctx context.Context, c CreateScheduleComma
 		return nil, err
 	}
 
-	schedule := scheduler.NewSchedule(c.Description, c.Frequency, c.Job.Slug,
-		c.Job.Data, retryPolicy, scheduler.ScheduleConfiguration{
-			TransportType: c.Configuration.TransportType,
-			Url:           c.Configuration.Url},
-		c.ScheduleStart, time.Now)
+	schedule := scheduler.NewSchedule(c.Description, c.Frequency, time.Now,
+		scheduler.WithScheduleStart(c.ScheduleStart),
+		scheduler.WithRetryPolicy(retryPolicy),
+		scheduler.WithJob(c.Job.Slug, c.Job.Data),
+		scheduler.WithConfiguration(c.Configuration.TransportType, c.Configuration.Url))
 
 	if err = h.Storage.Add(ctx, schedule); err != nil {
 		return nil, err

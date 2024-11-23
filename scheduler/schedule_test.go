@@ -31,12 +31,10 @@ func TestNewSchedule(t *testing.T) {
 	}
 
 	rp, _ := NewRetryPolicy(Constant, 5, "2s")
-	sc := ScheduleConfiguration{
-		TransportType: "http",
-		Url:           "http://example.com",
-	}
-
-	s := NewSchedule("description", "once", "slug", nil, rp, sc, nil, getStubDate)
+	s := NewSchedule("description", "once", getStubDate,
+		WithRetryPolicy(rp),
+		WithConfiguration("http", "http://example.com"),
+		WithJob("slug", nil))
 
 	expected.Id = s.Id
 	expected.GroupId = s.GroupId
@@ -58,7 +56,7 @@ func TestNewSchedule(t *testing.T) {
 }
 
 func TestStart(t *testing.T) {
-	s := NewSchedule("", "once", "", nil, RetryPolicy{}, ScheduleConfiguration{}, nil, getStubDate)
+	s := NewSchedule("", "once", getStubDate)
 
 	s.Start(getStubDate)
 
@@ -74,7 +72,7 @@ func TestStart(t *testing.T) {
 
 func TestNewScheduleWithSpecifiedScheduleStart(t *testing.T) {
 	scheduleStart := getStubDate()
-	s := NewSchedule("", "once", "", nil, RetryPolicy{}, ScheduleConfiguration{}, &scheduleStart, getStubDate)
+	s := NewSchedule("", "once", getStubDate, WithScheduleStart(&scheduleStart))
 
 	if *s.NextExecutionDate != scheduleStart {
 		t.Errorf("expect result %+v, got %+v", scheduleStart, *s.NextExecutionDate)
@@ -82,7 +80,7 @@ func TestNewScheduleWithSpecifiedScheduleStart(t *testing.T) {
 }
 
 func TestNewScheduleWithOnceFrequency(t *testing.T) {
-	s := NewSchedule("", "once", "", nil, RetryPolicy{}, ScheduleConfiguration{}, nil, getStubDate)
+	s := NewSchedule("", "once", getStubDate)
 
 	expected := getStubDate().Round(time.Second)
 
@@ -92,7 +90,7 @@ func TestNewScheduleWithOnceFrequency(t *testing.T) {
 }
 
 func TestNewScheduleWithCronFrequency(t *testing.T) {
-	s := NewSchedule("", "*/10 * * * * *", "", nil, RetryPolicy{}, ScheduleConfiguration{}, nil, getStubDate)
+	s := NewSchedule("", "*/10 * * * * *", getStubDate)
 
 	expected := getStubDate().Add(time.Second * 10).Round(time.Second)
 
@@ -102,7 +100,7 @@ func TestNewScheduleWithCronFrequency(t *testing.T) {
 }
 
 func TestSucceedWithoutNextExecution(t *testing.T) {
-	s := NewSchedule("", "once", "", nil, RetryPolicy{}, ScheduleConfiguration{}, nil, getStubDate)
+	s := NewSchedule("", "once", getStubDate)
 
 	s.Succeed(getStubDate)
 
@@ -116,7 +114,7 @@ func TestSucceedWithoutNextExecution(t *testing.T) {
 }
 
 func TestSucceedWithValidNextExecution(t *testing.T) {
-	s := NewSchedule("", "*/10 * * * * *", "", nil, RetryPolicy{}, ScheduleConfiguration{}, nil, getStubDate)
+	s := NewSchedule("", "*/10 * * * * *", getStubDate)
 
 	s.Succeed(getStubDate)
 
@@ -133,7 +131,7 @@ func TestSucceedWithValidNextExecution(t *testing.T) {
 
 func TestFailedWithRetryPolicyWithPossibleRetryDate(t *testing.T) {
 	rp, _ := NewRetryPolicy(Constant, 3, "15s")
-	s := NewSchedule("", "once", "", nil, rp, ScheduleConfiguration{}, nil, getStubDate)
+	s := NewSchedule("", "once", getStubDate, WithRetryPolicy(rp))
 
 	s.Failed(2, getStubDate)
 
@@ -150,7 +148,7 @@ func TestFailedWithRetryPolicyWithPossibleRetryDate(t *testing.T) {
 
 func TestFailedWithRetryPolicyWithoutPossibleRetryDate(t *testing.T) {
 	rp, _ := NewRetryPolicy(Constant, 3, "1s")
-	s := NewSchedule("", "once", "", nil, rp, ScheduleConfiguration{}, nil, getStubDate)
+	s := NewSchedule("", "once", getStubDate, WithRetryPolicy(rp))
 
 	s.Failed(100, getStubDate)
 
@@ -164,7 +162,7 @@ func TestFailedWithRetryPolicyWithoutPossibleRetryDate(t *testing.T) {
 }
 
 func TestFailedWithoutRetryPolicyWithoutNextExecutionTime(t *testing.T) {
-	s := NewSchedule("", "once", "", nil, RetryPolicy{}, ScheduleConfiguration{}, nil, getStubDate)
+	s := NewSchedule("", "once", getStubDate)
 
 	s.Failed(1, getStubDate)
 
@@ -178,7 +176,7 @@ func TestFailedWithoutRetryPolicyWithoutNextExecutionTime(t *testing.T) {
 }
 
 func TestFailedWithoutRetryPolicyWithNextExecutionTime(t *testing.T) {
-	s := NewSchedule("", "*/10 * * * * *", "", nil, RetryPolicy{}, ScheduleConfiguration{}, nil, getStubDate)
+	s := NewSchedule("", "*/10 * * * * *", getStubDate)
 
 	s.Failed(1, getStubDate)
 

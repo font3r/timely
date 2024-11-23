@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS schedules
     description CHARACTER VARYING(1024),
     status CHARACTER VARYING(64) NOT NULL,
     frequency CHARACTER VARYING(256) NOT NULL,
+    schedule_start TIMESTAMP WITH TIME ZONE,
     retry_policy_strategy CHARACTER VARYING(32),
     retry_policy_count INT,
     retry_policy_interval CHARACTER VARYING(32),
