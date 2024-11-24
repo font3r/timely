@@ -4,9 +4,7 @@
     ENCODING = 'UTF8'
     LOCALE_PROVIDER = 'libc'
     CONNECTION LIMIT = -1;
-
-SET TIME ZONE 'UTC';
-
+    
 --
 DROP TABLE IF EXISTS job_runs;
 DROP TABLE IF EXISTS jobs;
