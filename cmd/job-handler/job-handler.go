@@ -75,7 +75,7 @@ type ScheduleJobEvent struct {
 	Data       *map[string]any `json:"data"`
 }
 
-var statusAddress = "http://localhost:5000/api/v1/schedules/status"
+var statusAddress = "http://localhost:7468/api/v1/schedules/status"
 
 func processSyncJob(event ScheduleJobEvent) {
 	for i := 0; i < 5; i++ {

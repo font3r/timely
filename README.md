@@ -21,3 +21,4 @@ TODO:
 - [ ] admin panel
 - [ ] data retention
 - [ ] integration tests
+- [ ] support for other async transports (eg. Kafka)
