@@ -39,7 +39,7 @@ type ScheduleConfiguration struct {
 
 func main() {
 	jobsAmount := 10000
-	timelyAddress, _ := url.Parse("http://localhost:5000/api/v1/schedules")
+	timelyAddress, _ := url.Parse("http://localhost:7468/api/v1/schedules")
 	jobHandlerAddress, _ := url.Parse("http://localhost:5001/api/v1/jobs/process-user-notifications")
 	jobName := "test-stress-job-%i"
 

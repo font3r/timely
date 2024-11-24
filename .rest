@@ -1,4 +1,4 @@
-@baseAddress = http://localhost:5000
+@baseAddress = http://localhost:7468
 @scheduleId = {{schedule.response.body.id}}
 
 ### Get schedule
@@ -35,7 +35,7 @@ Content-Type: application/json
 
 {
     "description": "test job description",
-    "scheduleStart": "2024-11-20T23:00:00+01:00",
+    "scheduleStart": "2024-11-25T00:00:00+01:00",
     "frequency": "once",
     "job": {
         "slug": "process-user-notifications",
