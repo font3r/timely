@@ -73,12 +73,59 @@ func TestGetNextExecutionPolicyAttemptsExceeded(t *testing.T) {
 	}
 }
 
-func TestGetNextExecutionPolicy(t *testing.T) {
+func TestGetNextExecutionPolicyAttemptsLessOrEqualToZero(t *testing.T) {
+	rp, _ := NewRetryPolicy(Constant, 5, "10s")
+
+	tests := map[string]struct {
+		attempt int
+
+		expected time.Time
+	}{
+		"attempt_equal_to_0": {
+			attempt:  0,
+			expected: time.Time{},
+		},
+		"attempt_less_than_0": {
+			attempt:  -1,
+			expected: time.Time{},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			nextExecAt := rp.GetNextExecutionTime(getStubDate(), 0)
+			if nextExecAt != test.expected {
+				t.Errorf("expect result %+v, got %+v", time.Time{}, nextExecAt)
+			}
+		})
+	}
+}
+
+func TestGetNextExecutionPolicyWithConstantStrategy(t *testing.T) {
 	rp, _ := NewRetryPolicy(Constant, 5, "10s")
 
 	for i := 1; i <= rp.Count; i++ {
 		expected := getStubDate().Add(time.Duration(10*i) * time.Second).Round(time.Second)
 		nextExecAt := rp.GetNextExecutionTime(getStubDate().Add(time.Duration(10*(i-1))*time.Second), i)
+
+		if nextExecAt != expected {
+			t.Errorf("expect result %+v, got %+v", expected, nextExecAt)
+		}
+	}
+}
+
+func TestGetNextExecutionPolicyWithLinearStrategy(t *testing.T) {
+	rp, _ := NewRetryPolicy(Linear, 5, "10s")
+
+	for i := 1; i <= rp.Count; i++ {
+		nextExec, expected := getStubDate(), getStubDate()
+
+		for j := 1; j <= i; j++ {
+			expected = expected.Add(time.Duration(10*j) * time.Second).Round(time.Second)
+			nextExec = nextExec.Add(time.Duration(10*(j-1)) * time.Second).Round(time.Second)
+		}
+
+		nextExecAt := rp.GetNextExecutionTime(nextExec, i)
 
 		if nextExecAt != expected {
 			t.Errorf("expect result %+v, got %+v", expected, nextExecAt)

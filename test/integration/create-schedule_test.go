@@ -61,7 +61,7 @@ func TestCreateSchedule(t *testing.T) {
 }
 
 func getStubDate() time.Time {
-	return time.Date(2000, time.January, 1, 1, 1, 0, 0, time.Local)
+	return time.Date(2000, time.January, 1, 0, 0, 0, 0, time.Local)
 }
 
 func startPostgres(ctx context.Context) (*postgres.PostgresContainer, error) {

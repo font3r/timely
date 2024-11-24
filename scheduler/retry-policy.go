@@ -9,9 +9,9 @@ import (
 type StrategyType string
 
 const (
-	Constant    StrategyType = "constant"    // 100ms, 100ms, 100ms
-	Linear      StrategyType = "linear"      // 100ms, 200ms, 300ms
-	Exponential StrategyType = "exponential" // 100ms, 200ms, 400ms
+	Constant    StrategyType = "constant"    // 100ms, 100ms, 100ms, 100ms, 100ms
+	Linear      StrategyType = "linear"      // 100ms, 200ms, 300ms, 400ms, 500ms
+	Exponential StrategyType = "exponential" // 100ms, 200ms, 400ms, 800ms, 16000ms
 )
 
 type RetryPolicy struct {
@@ -47,7 +47,7 @@ func NewRetryPolicy(strategyType StrategyType, count int, interval string) (Retr
 
 func (rp RetryPolicy) GetNextExecutionTime(executionDate time.Time, attempt int) time.Time {
 	d, _ := time.ParseDuration(rp.Interval)
-	if attempt > rp.Count {
+	if attempt > rp.Count || attempt <= 0 {
 		return time.Time{}
 	}
 
@@ -55,6 +55,11 @@ func (rp RetryPolicy) GetNextExecutionTime(executionDate time.Time, attempt int)
 	case Constant:
 		{
 			return executionDate.Add(d).Round(time.Second)
+		}
+	case Linear:
+		{
+			return executionDate.Add(time.Duration(d.Nanoseconds() * int64(attempt))).
+				Round(time.Second)
 		}
 	default:
 		// TODO: handle all strategies
