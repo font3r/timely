@@ -1,3 +1,5 @@
+[![Build and test](https://github.com/font3r/timely/actions/workflows/build-and-test.yml/badge.svg?branch=main)](https://github.com/font3r/timely/actions/workflows/build-and-test.yml)
+
 centralised system for job management
 
 TODO:
