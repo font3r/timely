@@ -61,12 +61,7 @@ func TestCreateSchedule(t *testing.T) {
 }
 
 func getStubDate() time.Time {
-	d, err := time.Parse(time.RFC3339, "2000-01-01T10:30:00+01:00")
-	if err != nil {
-		panic(err)
-	}
-
-	return d
+	return time.Date(2000, time.January, 1, 1, 1, 0, 0, time.Local)
 }
 
 func startPostgres(ctx context.Context) (*postgres.PostgresContainer, error) {

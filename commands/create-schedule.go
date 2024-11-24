@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"slices"
 	"time"
 	"timely/scheduler"
 
@@ -45,8 +46,15 @@ type CreateScheduleResponse struct {
 var ErrJobScheduleConflict = scheduler.Error{
 	Code: "JOB_SCHEDULE_CONFLICT",
 	Msg:  "job has assigned schedule already"}
+var ErrUnsupportedTransportType = scheduler.Error{
+	Code: "UNSUPPORTED_TRANSPORT_TYPE",
+	Msg:  "unsupported transport type"}
 
 func (h CreateScheduleHandler) Handle(ctx context.Context, c CreateScheduleCommand) (*CreateScheduleResponse, error) {
+	if !slices.Contains(scheduler.Supports, string(c.Configuration.TransportType)) {
+		return nil, ErrUnsupportedTransportType
+	}
+
 	retryPolicy, err := getRetryPolicy(c.RetryPolicy)
 	if err != nil {
 		return nil, err
