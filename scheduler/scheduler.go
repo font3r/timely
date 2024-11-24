@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"slices"
 	"sync"
 	"time"
 	log "timely/logger"
@@ -47,8 +49,11 @@ var (
 
 const SchedulerTickDelay = time.Second
 
+var Supports []string
+
+// TODO: options pattern
 func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTransportDriver,
-	syncTransport SyncTransportDriver) *Scheduler {
+	syncTransport SyncTransportDriver, opts []string) *Scheduler {
 
 	scheduler := Scheduler{
 		Id:             uuid.New(),
@@ -57,16 +62,15 @@ func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTrans
 		SyncTransport:  syncTransport,
 	}
 
+	Supports = opts
+
 	log.Logger.Printf("starting scheduler with id %s\n", scheduler.Id)
 
-	err := scheduler.createAsyncTransportDependencies()
-	if err != nil {
-		log.Logger.Printf("creating internal exchanges/queues error - %v", err)
-		return nil
+	if slices.Contains(Supports, "rabbitmq") {
+		go scheduler.processJobEvents(ctx)
 	}
 
-	go scheduler.processJobEvents(ctx)
-	go func(storage StorageDriver, asyncTransport AsyncTransportDriver) {
+	go func() {
 		for {
 			err := scheduler.processTick(ctx)
 			if err != nil {
@@ -75,34 +79,9 @@ func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTrans
 
 			time.Sleep(SchedulerTickDelay)
 		}
-	}(storage, asyncTransport)
+	}()
 
 	return &scheduler
-}
-
-func (s *Scheduler) createAsyncTransportDependencies() error {
-	err := s.AsyncTransport.CreateExchange(string(ExchangeJobSchedule))
-	if err != nil {
-		return nil
-	}
-
-	err = s.AsyncTransport.CreateExchange(string(ExchangeJobStatus))
-	if err != nil {
-		return err
-	}
-
-	err = s.AsyncTransport.CreateQueue(string(QueueJobStatus))
-	if err != nil {
-		return err
-	}
-
-	err = s.AsyncTransport.BindQueue(string(QueueJobStatus), string(ExchangeJobStatus),
-		string(RoutingKeyJobStatus))
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (s *Scheduler) processTick(ctx context.Context) error {
@@ -133,6 +112,9 @@ func (s *Scheduler) processSchedule(ctx context.Context, schedule *Schedule, wg 
 		schueduleStartErr = s.handleHttp(ctx, schedule, &jobRun)
 	case Rabbitmq:
 		schueduleStartErr = s.handleRabbitMq(ctx, schedule, &jobRun)
+	default:
+		schueduleStartErr = fmt.Errorf("unsupported transport type - %s",
+			schedule.Configuration.TransportType)
 	}
 
 	if schueduleStartErr != nil {
@@ -184,6 +166,7 @@ func (s *Scheduler) handleHttp(ctx context.Context, schedule *Schedule, jobRun *
 	return nil
 }
 
+// TODO: this probably should be external dependency that signals scheduler about event
 func (s *Scheduler) handleRabbitMq(ctx context.Context, schedule *Schedule, jobRun *JobRun) error {
 	err := s.AsyncTransport.BindQueue(schedule.Job.Slug, string(ExchangeJobSchedule), schedule.Job.Slug)
 	if err != nil {
