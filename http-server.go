@@ -42,11 +42,6 @@ func createSchedule(v1 *mux.Router, app Application) {
 
 		result, err := h.Handle(req.Context(), c)
 		if err != nil {
-			if errors.Is(err, commands.ErrJobScheduleConflict) {
-				problem(w, http.StatusConflict, err)
-				return
-			}
-
 			problem(w, http.StatusUnprocessableEntity, err)
 			return
 		}
@@ -95,8 +90,8 @@ func validateCreateSchedule(req *http.Request) (commands.CreateScheduleCommand, 
 		err = errors.Join(errors.New("missing schedule configuration"))
 	}
 
-	// TODO: this would have to be validated against scheduler configurable available transports
-	if comm.Configuration.TransportType != scheduler.Http && comm.Configuration.TransportType != scheduler.Rabbitmq {
+	if comm.Configuration.TransportType != scheduler.Http &&
+		comm.Configuration.TransportType != scheduler.Rabbitmq {
 		err = errors.Join(errors.New("invalid transport type"))
 	}
 

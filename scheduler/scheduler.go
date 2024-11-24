@@ -51,9 +51,8 @@ const SchedulerTickDelay = time.Second
 
 var Supports []string
 
-// TODO: options pattern
 func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTransportDriver,
-	syncTransport SyncTransportDriver, opts []string) *Scheduler {
+	syncTransport SyncTransportDriver, supports []string) *Scheduler {
 
 	scheduler := Scheduler{
 		Id:             uuid.New(),
@@ -62,7 +61,7 @@ func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTrans
 		SyncTransport:  syncTransport,
 	}
 
-	Supports = opts
+	Supports = supports
 
 	log.Logger.Printf("starting scheduler with id %s\n", scheduler.Id)
 

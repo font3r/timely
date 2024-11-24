@@ -43,12 +43,12 @@ type CreateScheduleResponse struct {
 	Id uuid.UUID `json:"id"`
 }
 
-var ErrJobScheduleConflict = scheduler.Error{
-	Code: "JOB_SCHEDULE_CONFLICT",
-	Msg:  "job has assigned schedule already"}
 var ErrUnsupportedTransportType = scheduler.Error{
 	Code: "UNSUPPORTED_TRANSPORT_TYPE",
 	Msg:  "unsupported transport type"}
+var ErrTransportError = scheduler.Error{
+	Code: "TRANSPORT_ERROR",
+	Msg:  "transport error"}
 
 func (h CreateScheduleHandler) Handle(ctx context.Context, c CreateScheduleCommand) (*CreateScheduleResponse, error) {
 	if !slices.Contains(scheduler.Supports, string(c.Configuration.TransportType)) {
@@ -72,15 +72,12 @@ func (h CreateScheduleHandler) Handle(ctx context.Context, c CreateScheduleComma
 
 	// TODO: that part probably should not be a part of command handler
 	if c.Configuration.TransportType == scheduler.Rabbitmq {
-		if err = h.AsyncTransport.CreateQueue(schedule.Job.Slug); err != nil {
-			// TODO: at this point we should delete job from db
-			return nil, err
+		err := h.createTransportDependencies(schedule)
+		if err != nil {
+			h.Storage.DeleteScheduleById(ctx, schedule.Id)
 		}
 
-		if err = h.AsyncTransport.BindQueue(schedule.Job.Slug, string(scheduler.ExchangeJobSchedule),
-			schedule.Job.Slug); err != nil {
-			return nil, err
-		}
+		return nil, ErrTransportError
 	}
 
 	return &CreateScheduleResponse{Id: schedule.Id}, nil
@@ -98,4 +95,17 @@ func getRetryPolicy(retryPolicyConf RetryPolicyConfiguration) (scheduler.RetryPo
 	}
 
 	return retryPolicy, nil
+}
+
+func (h CreateScheduleHandler) createTransportDependencies(schedule scheduler.Schedule) error {
+	if err := h.AsyncTransport.CreateQueue(schedule.Job.Slug); err != nil {
+		return err
+	}
+
+	if err := h.AsyncTransport.BindQueue(schedule.Job.Slug, string(scheduler.ExchangeJobSchedule),
+		schedule.Job.Slug); err != nil {
+		return err
+	}
+
+	return nil
 }
