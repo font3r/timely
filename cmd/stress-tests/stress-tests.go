@@ -44,10 +44,10 @@ func main() {
 	jobName := "test-stress-job-%i"
 
 	schedule := CreateScheduleCommand{
-		Description: "",
+		Description: "replace-me",
 		Frequency:   "once",
 		Job: JobConfiguration{
-			Slug: "",
+			Slug: "replace-me",
 		},
 		RetryPolicy: RetryPolicyConfiguration{
 			Strategy: "constant",

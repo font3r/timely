@@ -28,7 +28,7 @@ type RabbitMqTransport struct {
 	declaredExchanges []string
 }
 
-func NewRabbitMqTransportConnection(url string) (*RabbitMqTransport, error) {
+func NewRabbitMqConnection(url string) (*RabbitMqTransport, error) {
 	connection, err := amqp.Dial(url)
 	if err != nil {
 		log.Logger.Printf("error during opening rabbitmq connection - %v", err)

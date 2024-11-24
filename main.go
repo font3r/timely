@@ -68,7 +68,7 @@ func buildDependencies(ctx context.Context) Application {
 
 	var rabbitMqTransport *scheduler.RabbitMqTransport
 	if viper.IsSet("transport.rabbitmq") && viper.GetBool("transport.rabbitmq.enabled") {
-		rabbitMq, err := scheduler.NewRabbitMqTransportConnection(
+		rabbitMq, err := scheduler.NewRabbitMqConnection(
 			viper.GetString("transport.rabbitmq.connectionString"))
 		if err != nil {
 			panic(fmt.Sprintf("create transport error %s", err))

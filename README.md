@@ -6,9 +6,7 @@ TODO:
 
 - [x] mvp for task scheduling
 - [x] retry policy
-- [ ] detecting jobs that won't start due to timeout, how can we detect if job is in 'staled' state if we 
-  cannot pull status on demand. Should we set a maximum delay in status events?
-  - [ ] detect failed jobs that did not start or their start was interupted by scheduler restart
+- [ ] detecting jobs that won't start due to timeout, detect if job is in 'staled' state (does not send status events)
 - [x] support for sync transport interface (rest/grpc) (valid only starting tasks, or push based job status)
   - for job statusing we have to use push based model because of load balancing/consumer groups on horizontally scaled instanced
 - [x] basic persistance layer
