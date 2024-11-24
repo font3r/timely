@@ -15,7 +15,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
-func registerApiRoutes(router *mux.Router, app *Application) {
+func registerApiRoutes(router *mux.Router, app Application) {
 	v1 := router.PathPrefix("/api/v1").Subrouter()
 
 	createSchedule(v1, app)
@@ -27,7 +27,7 @@ func registerApiRoutes(router *mux.Router, app *Application) {
 	processJobEvent(v1, app)
 }
 
-func createSchedule(v1 *mux.Router, app *Application) {
+func createSchedule(v1 *mux.Router, app Application) {
 	v1.HandleFunc("/schedules", func(w http.ResponseWriter, req *http.Request) {
 		c, err := validateCreateSchedule(req)
 		if err != nil {
@@ -118,7 +118,7 @@ func validateCreateSchedule(req *http.Request) (commands.CreateScheduleCommand, 
 	return *comm, nil
 }
 
-func getSchedule(v1 *mux.Router, app *Application) {
+func getSchedule(v1 *mux.Router, app Application) {
 	v1.HandleFunc("/schedules/{id}", func(w http.ResponseWriter, req *http.Request) {
 		vars := mux.Vars(req)
 		id, err := uuid.Parse(vars["id"])
@@ -145,7 +145,7 @@ func getSchedule(v1 *mux.Router, app *Application) {
 	}).Methods("GET")
 }
 
-func getSchedules(v1 *mux.Router, app *Application) {
+func getSchedules(v1 *mux.Router, app Application) {
 	v1.HandleFunc("/schedules", func(w http.ResponseWriter, req *http.Request) {
 		h := queries.GetSchedulesHandler{Storage: app.Scheduler.Storage}
 		result, err := h.Handle(req.Context())
@@ -159,7 +159,7 @@ func getSchedules(v1 *mux.Router, app *Application) {
 	}).Methods("GET")
 }
 
-func deleteSchedule(v1 *mux.Router, app *Application) {
+func deleteSchedule(v1 *mux.Router, app Application) {
 	v1.HandleFunc("/schedules/{id}", func(w http.ResponseWriter, req *http.Request) {
 		vars := mux.Vars(req)
 		id, err := uuid.Parse(vars["id"])
@@ -181,7 +181,7 @@ func deleteSchedule(v1 *mux.Router, app *Application) {
 	}).Methods("DELETE")
 }
 
-func deleteSchedules(v1 *mux.Router, app *Application) {
+func deleteSchedules(v1 *mux.Router, app Application) {
 	v1.HandleFunc("/schedules", func(w http.ResponseWriter, req *http.Request) {
 		schedules, err := app.Scheduler.Storage.GetAll(req.Context())
 		if err != nil {
@@ -201,7 +201,7 @@ func deleteSchedules(v1 *mux.Router, app *Application) {
 	}).Methods("DELETE")
 }
 
-func processJobEvent(v1 *mux.Router, app *Application) {
+func processJobEvent(v1 *mux.Router, app Application) {
 	v1.HandleFunc("/schedules/status", func(w http.ResponseWriter, req *http.Request) {
 		payload, err := io.ReadAll(req.Body)
 		if err != nil {

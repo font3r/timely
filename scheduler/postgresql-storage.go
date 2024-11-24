@@ -99,7 +99,7 @@ func (pg Pgsql) GetAwaitingSchedules(ctx context.Context) ([]*Schedule, error) {
 			Job:         &Job{},
 		}
 		err = rows.Scan(&schedule.Id, &schedule.GroupId, &schedule.Description, &schedule.Status,
-			&schedule.ScheduleStart, &schedule.Frequency, &schedule.RetryPolicy.Strategy,
+			&schedule.Frequency, &schedule.ScheduleStart, &schedule.RetryPolicy.Strategy,
 			&schedule.RetryPolicy.Count, &schedule.RetryPolicy.Interval, &schedule.Configuration.TransportType,
 			&schedule.Configuration.Url, &schedule.LastExecutionDate, &schedule.NextExecutionDate,
 			&schedule.Job.Id, &schedule.Job.Slug, &jobData)
@@ -142,7 +142,7 @@ func (pg Pgsql) GetAll(ctx context.Context) ([]*Schedule, error) {
 		var jobData string
 
 		err = rows.Scan(&schedule.Id, &schedule.GroupId, &schedule.Description, &schedule.Status,
-			&schedule.ScheduleStart, &schedule.Frequency, &schedule.RetryPolicy.Strategy,
+			&schedule.Frequency, &schedule.ScheduleStart, &schedule.RetryPolicy.Strategy,
 			&schedule.RetryPolicy.Count, &schedule.RetryPolicy.Interval, &schedule.Configuration.TransportType,
 			&schedule.Configuration.Url, &schedule.LastExecutionDate, &schedule.NextExecutionDate,
 			&schedule.Job.Id, &schedule.Job.Slug, &jobData)
