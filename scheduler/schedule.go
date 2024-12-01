@@ -2,7 +2,6 @@ package scheduler
 
 import (
 	"time"
-	log "timely/logger"
 
 	"github.com/google/uuid"
 )
@@ -92,7 +91,6 @@ func (s *Schedule) Failed(attempt int, now func() time.Time) {
 		if retryAt != (time.Time{}) {
 			s.NextExecutionDate = &retryAt
 			s.Status = Waiting
-			log.Logger.Printf("schedule retrying at %v\n", retryAt)
 
 			return
 		}
