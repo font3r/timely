@@ -105,7 +105,7 @@ func TestGetNextExecutionPolicyWithConstantStrategy(t *testing.T) {
 	rp, _ := NewRetryPolicy(Constant, 5, "10s")
 
 	for i := 1; i <= rp.Count; i++ {
-		expected := getStubDate().Add(time.Duration(10*i) * time.Second).Round(time.Second)
+		expected := getStubDate().Add(time.Duration(10*i) * time.Second)
 		nextExecAt := rp.GetNextExecutionTime(getStubDate().Add(time.Duration(10*(i-1))*time.Second), i)
 
 		if nextExecAt != expected {
@@ -121,8 +121,8 @@ func TestGetNextExecutionPolicyWithLinearStrategy(t *testing.T) {
 		nextExec, expected := getStubDate(), getStubDate()
 
 		for j := 1; j <= i; j++ {
-			expected = expected.Add(time.Duration(10*j) * time.Second).Round(time.Second)
-			nextExec = nextExec.Add(time.Duration(10*(j-1)) * time.Second).Round(time.Second)
+			expected = expected.Add(time.Duration(10*j) * time.Second)
+			nextExec = nextExec.Add(time.Duration(10*(j-1)) * time.Second)
 		}
 
 		nextExecAt := rp.GetNextExecutionTime(nextExec, i)

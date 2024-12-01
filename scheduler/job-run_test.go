@@ -2,7 +2,6 @@ package scheduler
 
 import (
 	"testing"
-	"time"
 
 	"github.com/google/uuid"
 )
@@ -16,7 +15,7 @@ func TestNewRun(t *testing.T) {
 		ScheduleId: scheduleId,
 		Status:     JobWaiting,
 		Reason:     nil,
-		StartDate:  getStubDate().Round(time.Second),
+		StartDate:  getStubDate(),
 		EndDate:    nil,
 	}
 
@@ -34,7 +33,7 @@ func TestSucceed(t *testing.T) {
 
 	jr.Succeed(getStubDate)
 
-	expected := getStubDate().Round(time.Second)
+	expected := getStubDate()
 	if *jr.EndDate != expected {
 		t.Errorf("expect result %+v, got %+v", expected, *jr.EndDate)
 	}
@@ -49,7 +48,7 @@ func TestFailed(t *testing.T) {
 
 	jr.Failed("test fail reason", getStubDate)
 
-	expected := getStubDate().Round(time.Second)
+	expected := getStubDate()
 	if *jr.EndDate != expected {
 		t.Errorf("expect result %+v, got %+v", expected, *jr.EndDate)
 	}

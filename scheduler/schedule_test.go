@@ -6,7 +6,7 @@ import (
 )
 
 func TestNewSchedule(t *testing.T) {
-	net := getStubDate().Round(time.Second)
+	net := getStubDate()
 	expected := Schedule{
 		Id:          [16]byte{},
 		GroupId:     [16]byte{},
@@ -60,7 +60,7 @@ func TestStart(t *testing.T) {
 
 	s.Start(getStubDate)
 
-	expected := getStubDate().Round(time.Second)
+	expected := getStubDate()
 	if *s.LastExecutionDate != expected {
 		t.Errorf("expect result %+v, got %+v", expected, *s.LastExecutionDate)
 	}
@@ -82,7 +82,7 @@ func TestNewScheduleWithSpecifiedScheduleStart(t *testing.T) {
 func TestNewScheduleWithOnceFrequency(t *testing.T) {
 	s := NewSchedule("", "once", getStubDate)
 
-	expected := getStubDate().Round(time.Second)
+	expected := getStubDate()
 
 	if *s.NextExecutionDate != expected {
 		t.Errorf("expect result %+v, got %+v", expected, *s.NextExecutionDate)
@@ -92,7 +92,7 @@ func TestNewScheduleWithOnceFrequency(t *testing.T) {
 func TestNewScheduleWithCronFrequency(t *testing.T) {
 	s := NewSchedule("", "*/10 * * * * *", getStubDate)
 
-	expected := getStubDate().Add(time.Second * 10).Round(time.Second)
+	expected := getStubDate().Add(time.Second * 10)
 
 	if *s.NextExecutionDate != expected {
 		t.Errorf("expect result %+v, got %+v", expected, *s.NextExecutionDate)
@@ -118,7 +118,7 @@ func TestSucceedWithValidNextExecution(t *testing.T) {
 
 	s.Succeed(getStubDate)
 
-	expected := getStubDate().Add(time.Second * 10).Round(time.Second)
+	expected := getStubDate().Add(time.Second * 10)
 
 	if *s.NextExecutionDate != expected {
 		t.Errorf("expect result %+v, got %+v", expected, *s.NextExecutionDate)
@@ -135,7 +135,7 @@ func TestFailedWithRetryPolicyWithPossibleRetryDate(t *testing.T) {
 
 	s.Failed(2, getStubDate)
 
-	expected := getStubDate().Add(time.Second * 15).Round(time.Second)
+	expected := getStubDate().Add(time.Second * 15)
 
 	if *s.NextExecutionDate != expected {
 		t.Errorf("expect result %+v, got %+v", expected, *s.NextExecutionDate)
@@ -180,7 +180,7 @@ func TestFailedWithoutRetryPolicyWithNextExecutionTime(t *testing.T) {
 
 	s.Failed(1, getStubDate)
 
-	expected := getStubDate().Add(time.Second * 10).Round(time.Second)
+	expected := getStubDate().Add(time.Second * 10)
 
 	if *s.NextExecutionDate != expected {
 		t.Errorf("expect result %+v, got %+v", expected, *s.NextExecutionDate)
@@ -192,5 +192,5 @@ func TestFailedWithoutRetryPolicyWithNextExecutionTime(t *testing.T) {
 }
 
 func getStubDate() time.Time {
-	return time.Date(2000, time.January, 1, 0, 0, 0, 0, time.Local)
+	return time.Date(2000, time.January, 1, 0, 0, 0, 0, time.Local).Round(time.Second)
 }
