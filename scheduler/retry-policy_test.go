@@ -132,3 +132,20 @@ func TestGetNextExecutionPolicyWithLinearStrategy(t *testing.T) {
 		}
 	}
 }
+
+func TestGetNextExecutionPolicyWithInvalidStrategy(t *testing.T) {
+	rp := RetryPolicy{
+		Strategy: "invalid",
+		Count:    1,
+		Interval: "10s",
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+
+		}
+	}()
+
+	rp.GetNextExecutionTime(getStubDate(), 1)
+	t.Errorf("expected panic, found success")
+}
