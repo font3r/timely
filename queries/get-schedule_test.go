@@ -3,6 +3,7 @@ package queries
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"timely/scheduler"
 
@@ -21,24 +22,30 @@ func TestGetSchedule(t *testing.T) {
 			expectErr: "storage error",
 		},
 		"schedule_with_id_does_not_exist": {
-			id:        uuid.New(),
+			id:        uuid.MustParse("0f54d8c5-6690-4fa4-9489-f7ec575140bd"),
 			expectErr: ErrScheduleNotFound.Error(),
+		},
+		"schedule_with_id_exists_should_be_returned": {
+			id: uuid.MustParse("ad39c83f-59b1-4f01-8c6d-0196ce59127f"),
+			expected: ScheduleDetailsDto{
+				Id: uuid.MustParse("ad39c83f-59b1-4f01-8c6d-0196ce59127f"),
+			},
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
 			deps := getDeps()
-			_, err := deps.handler.Handle(context.Background(), GetSchedule{ScheduleId: test.id})
+			sch, err := deps.handler.Handle(context.Background(), GetSchedule{ScheduleId: test.id})
 
 			if test.expectErr != "" {
 				if test.expectErr != err.Error() {
 					t.Errorf("expect error %s, got %s", test.expectErr, err.Error())
 				}
 			} else {
-				//if sch != test.expected {
-				//	t.Errorf("expect result %s, got %s", test.expectErr, err.Error())
-				//}
+				if reflect.DeepEqual(sch, test.expected) {
+					t.Errorf("expect result %s, got %s", test.expectErr, err.Error())
+				}
 			}
 		})
 	}
@@ -49,18 +56,29 @@ type dependencies struct {
 	handler       GetScheduleHandler
 }
 
+type storageDriverFake struct {
+	schedules map[string]*scheduler.Schedule
+	jobRuns   map[string][]*scheduler.JobRun
+}
+
 func getDeps() dependencies {
 	storageDriver := &storageDriverFake{
-		Schedules: []scheduler.Schedule{
-			{
-				Id:                uuid.UUID{},
-				Description:       "",
-				Frequency:         "",
-				Status:            "",
-				RetryPolicy:       scheduler.RetryPolicy{},
-				LastExecutionDate: nil,
-				NextExecutionDate: nil,
-				Job:               nil,
+		schedules: map[string]*scheduler.Schedule{
+			"ad39c83f-59b1-4f01-8c6d-0196ce59127f": {
+				Id: uuid.MustParse("ad39c83f-59b1-4f01-8c6d-0196ce59127f"),
+				Job: &scheduler.Job{
+					Id:   uuid.New(),
+					Slug: "test-slug",
+					Data: nil,
+				},
+			},
+		},
+		jobRuns: map[string][]*scheduler.JobRun{
+			"ad39c83f-59b1-4f01-8c6d-0196ce59127f": {
+				{
+					Id:         uuid.New(),
+					ScheduleId: uuid.MustParse("ad39c83f-59b1-4f01-8c6d-0196ce59127f"),
+				},
 			},
 		},
 	}
@@ -71,16 +89,17 @@ func getDeps() dependencies {
 	}
 }
 
-type storageDriverFake struct {
-	Schedules []scheduler.Schedule
-}
-
 func (s storageDriverFake) GetScheduleById(ctx context.Context, id uuid.UUID) (*scheduler.Schedule, error) {
 	if id == uuid.Nil {
 		return nil, errors.New("storage error")
 	}
 
-	return &scheduler.Schedule{}, ErrScheduleNotFound
+	v, exists := s.schedules[id.String()]
+	if !exists {
+		return nil, ErrScheduleNotFound
+	}
+
+	return v, nil
 }
 
 func (s storageDriverFake) GetScheduleByJobSlug(ctx context.Context, slug string) (*scheduler.Schedule, error) {
@@ -128,5 +147,10 @@ func (s storageDriverFake) GetJobRuns(ctx context.Context, scheduleId uuid.UUID)
 }
 
 func (s storageDriverFake) GetRecentJobRuns(ctx context.Context, scheduleId uuid.UUID) ([]*scheduler.JobRun, error) {
-	panic("implement me")
+	v, exists := s.jobRuns[scheduleId.String()]
+	if !exists {
+		return nil, ErrScheduleNotFound
+	}
+
+	return v, nil
 }
