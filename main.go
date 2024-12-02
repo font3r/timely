@@ -26,8 +26,12 @@ func main() {
 
 	r := mux.NewRouter()
 	srv := &http.Server{
-		Addr:    ":7468",
-		Handler: handlers.CORS()(r),
+		Addr: ":7468",
+		Handler: handlers.CORS(
+			handlers.AllowedMethods([]string{"GET", "POST", "DELETE"}),
+			handlers.AllowedHeaders([]string{"Content-Type"}),
+			handlers.AllowedOrigins([]string{"http://localhost:3000"}),
+		)(r),
 	}
 
 	app := buildDependencies(ctx)
