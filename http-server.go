@@ -50,6 +50,7 @@ func createSchedule(v1 *mux.Router, app Application) {
 	}).Headers(scheduler.ContentTypeHeader, scheduler.ApplicationJson).Methods("POST")
 }
 
+// TODO: Cleanup validation for multiple invalid fields
 func validateCreateSchedule(req *http.Request) (commands.CreateScheduleCommand, error) {
 	comm := &commands.CreateScheduleCommand{}
 
@@ -60,48 +61,48 @@ func validateCreateSchedule(req *http.Request) (commands.CreateScheduleCommand, 
 	var err error
 
 	if comm.Description == "" {
-		err = errors.Join(errors.New("invalid description"))
+		err = errors.Join(err, errors.New("invalid description"))
 	}
 
 	if comm.Frequency == "" {
-		err = errors.Join(errors.New("missing frequency configuration"))
+		err = errors.Join(err, errors.New("missing frequency configuration"))
 	}
 
 	if comm.Frequency != string(scheduler.Once) {
-		_, err = scheduler.CronParser.Parse(comm.Frequency)
-		if err != nil {
-			err = errors.Join(errors.New("invalid frequency configuration"))
+		_, cronErr := scheduler.CronParser.Parse(comm.Frequency)
+		if cronErr != nil {
+			err = errors.Join(err, errors.New("invalid frequency configuration"))
 		}
 	}
 
 	if comm.ScheduleStart != nil && time.Now().After(*comm.ScheduleStart) {
-		err = errors.Join(errors.New("invalid schedule start"))
+		err = errors.Join(err, errors.New("invalid schedule start"))
 	}
 
 	if comm.Job == (commands.JobConfiguration{}) {
-		err = errors.Join(errors.New("missing job configuration"))
+		err = errors.Join(err, errors.New("missing job configuration"))
 	}
 
 	if comm.Job.Slug == "" {
-		err = errors.Join(errors.New("invalid job slug"))
+		err = errors.Join(err, errors.New("invalid job slug"))
 	}
 
 	if comm.Configuration == (commands.ScheduleConfiguration{}) {
-		err = errors.Join(errors.New("missing schedule configuration"))
+		err = errors.Join(err, errors.New("missing schedule configuration"))
 	}
 
 	if comm.Configuration.TransportType != scheduler.Http &&
 		comm.Configuration.TransportType != scheduler.Rabbitmq {
-		err = errors.Join(errors.New("invalid transport type"))
+		err = errors.Join(err, errors.New("invalid transport type"))
 	}
 
 	if comm.Configuration.TransportType == scheduler.Http {
 		if comm.Configuration.Url == "" {
-			err = errors.Join(errors.New("missing url for http transport"))
+			err = errors.Join(err, errors.New("missing url for http transport"))
 		} else {
-			_, err = url.ParseRequestURI(comm.Configuration.Url)
-			if err != nil {
-				err = errors.Join(errors.New("invalid url for http transport"))
+			_, urlErr := url.ParseRequestURI(comm.Configuration.Url)
+			if urlErr != nil {
+				err = errors.Join(err, errors.New("invalid url for http transport"))
 			}
 		}
 	}
