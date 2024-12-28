@@ -83,7 +83,8 @@ func (pg Pgsql) GetAwaitingSchedules(ctx context.Context) ([]*Schedule, error) {
 				s.url, s.last_execution_date, s.next_execution_date, j.id, j.slug, j.data
 			FROM jobs AS j 
 			JOIN schedules AS s ON s.id = j.schedule_id
-			WHERE status IN ($1) AND next_execution_date <= $2`
+			WHERE status IN ($1) AND next_execution_date <= $2
+			ORDER BY next_execution_date ASC`
 
 	rows, err := pg.pool.Query(ctx, sql, Waiting, time.Now())
 
