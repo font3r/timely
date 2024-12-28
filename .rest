@@ -6,7 +6,7 @@ GET {{baseAddress}}/api/v1/schedules/{{scheduleId}}
 
 ### Get schedules
 # @name schedules
-GET {{baseAddress}}/api/v1/schedules
+GET {{baseAddress}}/api/v1/schedules?page=1&pageSize=3
 
 ### Create schedule 'cyclic' frequency, start at specific date
 # @name schedule
@@ -35,7 +35,7 @@ Content-Type: application/json
 
 {
     "description": "test job description",
-    "scheduleStart": "2024-11-25T00:00:00+01:00",
+    "scheduleStart": "2025-11-25T00:00:00+01:00",
     "frequency": "once",
     "job": {
         "slug": "process-user-notifications",
@@ -56,6 +56,3 @@ Content-Type: application/json
 
 ### Delete schedule
 DELETE {{baseAddress}}/api/v1/schedules/{{scheduleId}}
-
-### Delete schedules
-DELETE {{baseAddress}}/api/v1/schedules

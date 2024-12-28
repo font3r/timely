@@ -38,6 +38,7 @@ type ScheduleConfiguration struct {
 }
 
 func main() {
+	// TODO: Parallel
 	jobsAmount := 10000
 	timelyAddress, _ := url.Parse("http://localhost:7468/api/v1/schedules")
 	jobHandlerAddress, _ := url.Parse("http://localhost:5001/api/v1/jobs/process-user-notifications")

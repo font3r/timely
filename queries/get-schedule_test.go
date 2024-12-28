@@ -110,7 +110,7 @@ func (s storageDriverFake) GetAwaitingSchedules(ctx context.Context) ([]*schedul
 	panic("implement me")
 }
 
-func (s storageDriverFake) GetAll(ctx context.Context) ([]*scheduler.Schedule, error) {
+func (s storageDriverFake) GetPaged(ctx context.Context, page int, pageSize int) ([]*scheduler.Schedule, error) {
 	panic("implement me")
 }
 

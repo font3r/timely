@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"time"
 	"timely/commands"
 	"timely/queries"
@@ -22,7 +23,6 @@ func registerApiRoutes(router *mux.Router, app Application) {
 	getSchedule(v1, app)
 	getSchedules(v1, app)
 	deleteSchedule(v1, app)
-	deleteSchedules(v1, app)
 
 	processJobEvent(v1, app)
 }
@@ -143,8 +143,22 @@ func getSchedule(v1 *mux.Router, app Application) {
 
 func getSchedules(v1 *mux.Router, app Application) {
 	v1.HandleFunc("/schedules", func(w http.ResponseWriter, req *http.Request) {
+		vars := req.URL.Query()
+		page, err := strconv.Atoi(vars.Get("page"))
+		if err != nil || page <= 0 {
+			problem(w, http.StatusBadRequest, errors.New("invalid page"))
+			return
+		}
+
+		pageSize, err := strconv.Atoi(vars.Get("pageSize"))
+		if err != nil || pageSize > 100 || pageSize <= 0 {
+			problem(w, http.StatusBadRequest, errors.New("invalid pageSize"))
+			return
+		}
+
+		q := queries.GetSchedules{Page: page, PageSize: pageSize}
 		h := queries.GetSchedulesHandler{Storage: app.Scheduler.Storage}
-		result, err := h.Handle(req.Context())
+		result, err := h.Handle(req.Context(), q)
 
 		if err != nil {
 			problem(w, http.StatusUnprocessableEntity, err)
@@ -171,26 +185,6 @@ func deleteSchedule(v1 *mux.Router, app Application) {
 		if err != nil {
 			problem(w, http.StatusUnprocessableEntity, err)
 			return
-		}
-
-		noContent(w)
-	}).Methods("DELETE")
-}
-
-func deleteSchedules(v1 *mux.Router, app Application) {
-	v1.HandleFunc("/schedules", func(w http.ResponseWriter, req *http.Request) {
-		schedules, err := app.Scheduler.Storage.GetAll(req.Context())
-		if err != nil {
-			problem(w, http.StatusUnprocessableEntity, err)
-			return
-		}
-
-		for _, schedule := range schedules {
-			err = app.Scheduler.Storage.DeleteScheduleById(req.Context(), schedule.Id)
-			if err != nil {
-				problem(w, http.StatusUnprocessableEntity, err)
-				return
-			}
 		}
 
 		noContent(w)

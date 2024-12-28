@@ -8,7 +8,10 @@ import (
 	"github.com/google/uuid"
 )
 
-type GetSchedules struct{}
+type GetSchedules struct {
+	Page     int
+	PageSize int
+}
 
 type GetSchedulesHandler struct {
 	Storage scheduler.StorageDriver
@@ -29,8 +32,8 @@ type JobDto struct {
 	Data *map[string]any `json:"data"`
 }
 
-func (h GetSchedulesHandler) Handle(ctx context.Context) ([]ScheduleDto, error) {
-	schedules, err := h.Storage.GetAll(ctx)
+func (h GetSchedulesHandler) Handle(ctx context.Context, q GetSchedules) ([]ScheduleDto, error) {
+	schedules, err := h.Storage.GetPaged(ctx, q.Page, q.PageSize)
 
 	if err != nil {
 		return []ScheduleDto{}, err

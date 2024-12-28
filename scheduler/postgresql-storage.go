@@ -14,7 +14,7 @@ import (
 type StorageDriver interface {
 	GetScheduleById(ctx context.Context, id uuid.UUID) (*Schedule, error)
 	GetAwaitingSchedules(ctx context.Context) ([]*Schedule, error)
-	GetAll(ctx context.Context) ([]*Schedule, error)
+	GetPaged(ctx context.Context, page int, pageSize int) ([]*Schedule, error)
 	Add(ctx context.Context, schedule Schedule) error
 	DeleteScheduleById(ctx context.Context, id uuid.UUID) error
 	UpdateSchedule(ctx context.Context, schedule Schedule) error
@@ -120,20 +120,23 @@ func (pg Pgsql) GetAwaitingSchedules(ctx context.Context) ([]*Schedule, error) {
 	return schedules, nil
 }
 
-func (pg Pgsql) GetAll(ctx context.Context) ([]*Schedule, error) {
+func (pg Pgsql) GetPaged(ctx context.Context, page int, pageSize int) ([]*Schedule, error) {
 	sql := `SELECT s.id, s.group_id, s.description, s.status, s.frequency, s.schedule_start, 
 				s.retry_policy_strategy, s.retry_policy_count, s.retry_policy_interval, s.transport_type, 
 				s.url, s.last_execution_date, s.next_execution_date, j.id, j.slug, j.data
 			FROM jobs AS j 
-			JOIN schedules AS s ON s.id = j.schedule_id`
+			JOIN schedules AS s ON s.id = j.schedule_id
+			ORDER BY last_execution_date DESC
+			OFFSET $1
+			LIMIT $2`
 
-	rows, err := pg.pool.Query(ctx, sql)
+	rows, err := pg.pool.Query(ctx, sql, (page-1)*pageSize, pageSize)
 
 	if err != nil {
 		return nil, err
 	}
 
-	schedules := make([]*Schedule, 0)
+	schedules := make([]*Schedule, 0, pageSize)
 	for rows.Next() {
 		var schedule = Schedule{
 			RetryPolicy: RetryPolicy{},
