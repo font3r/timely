@@ -4,6 +4,7 @@ import (
 	"context"
 	"slices"
 	"time"
+	log "timely/logger"
 	"timely/scheduler"
 
 	"github.com/google/uuid"
@@ -74,10 +75,10 @@ func (h CreateScheduleHandler) Handle(ctx context.Context, c CreateScheduleComma
 	if c.Configuration.TransportType == scheduler.Rabbitmq {
 		err := h.createTransportDependencies(schedule)
 		if err != nil {
+			log.Logger.Printf("error during creating schedule %+v", err)
 			h.Storage.DeleteScheduleById(ctx, schedule.Id)
+			return nil, ErrTransportError
 		}
-
-		return nil, ErrTransportError
 	}
 
 	return &CreateScheduleResponse{Id: schedule.Id}, nil

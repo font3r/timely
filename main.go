@@ -78,7 +78,7 @@ func buildDependencies(ctx context.Context) Application {
 			panic(fmt.Sprintf("create transport error %s", err))
 		}
 
-		err = createTransportDependencies(rabbitMqTransport)
+		err = createTransportDependencies(rabbitMq)
 		if err != nil {
 			panic(fmt.Sprintf("creating internal exchanges/queues error - %v", err))
 		}
