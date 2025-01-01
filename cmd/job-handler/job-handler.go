@@ -67,7 +67,7 @@ func main() {
 		w.WriteHeader(http.StatusAccepted)
 	}).Methods("POST")
 
-	StartRabbitMq()
+	StartRabbitMq(context.Background())
 
 	log.Logger.Printf("listening on %v", srv.Addr)
 	if err := srv.ListenAndServe(); err != nil {
@@ -75,7 +75,7 @@ func main() {
 	}
 }
 
-func StartRabbitMq() {
+func StartRabbitMq(ctx context.Context) {
 	log.Logger.Println("starting ...")
 
 	tra, err := scheduler.NewRabbitMqConnection("amqp://guest:guest@localhost:5672")
@@ -86,7 +86,7 @@ func StartRabbitMq() {
 	for _, jobSlug := range []string{"process-user-notifications"} {
 		log.Logger.Printf("test app registered %s", jobSlug)
 		go func(jobSlug string) {
-			err = tra.Subscribe(context.Background(), jobSlug, func(message []byte) error {
+			err = tra.Subscribe(ctx, jobSlug, func(message []byte) error {
 				log.Logger.Printf("requested job start with slug %s", jobSlug)
 
 				var event ScheduleJobEvent
@@ -95,7 +95,7 @@ func StartRabbitMq() {
 					return err
 				}
 
-				err = processAsyncJob(tra, event)
+				err = processAsyncJob(ctx, tra, event)
 				if err != nil {
 					log.Logger.Printf("error during job processing - %s", err)
 				}
@@ -154,16 +154,16 @@ func processSyncJob(event ScheduleJobEvent) {
 	log.Logger.Println("sent success event")
 }
 
-func processAsyncJob(tra *scheduler.RabbitMqTransport, event ScheduleJobEvent) error {
+func processAsyncJob(ctx context.Context, tra *scheduler.RabbitMqTransport, event ScheduleJobEvent) error {
 	for i := 0; i < 5; i++ {
 		if jitterFail() {
-			err := tra.Publish(context.Background(), string(scheduler.ExchangeJobStatus),
+			err := tra.Publish(ctx, string(scheduler.ExchangeJobStatus),
 				string(scheduler.RoutingKeyJobStatus), JobStatusEvent{
 					ScheduleId: event.ScheduleId,
 					GroupId:    event.GroupId,
 					JobRunId:   event.JobRunId,
 					Status:     string(JobFailed),
-					Reason:     "failed due to jitter error",
+					Reason:     fmt.Sprintf("failed due to jitter error at %d", i),
 				})
 
 			if err != nil {
@@ -177,7 +177,7 @@ func processAsyncJob(tra *scheduler.RabbitMqTransport, event ScheduleJobEvent) e
 		time.Sleep(time.Second)
 	}
 
-	err := tra.Publish(context.Background(), string(scheduler.ExchangeJobStatus),
+	err := tra.Publish(ctx, string(scheduler.ExchangeJobStatus),
 		string(scheduler.RoutingKeyJobStatus), JobStatusEvent{
 			ScheduleId: event.ScheduleId,
 			GroupId:    event.GroupId,
@@ -194,7 +194,7 @@ func processAsyncJob(tra *scheduler.RabbitMqTransport, event ScheduleJobEvent) e
 }
 
 func jitterFail() bool {
-	failPercentage := 100
+	failPercentage := 15
 
 	return rand.Intn(100) <= failPercentage-1
 }

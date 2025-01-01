@@ -207,7 +207,7 @@ func HandleJobEvent(ctx context.Context, message []byte, storage StorageDriver) 
 	jobStatus := JobStatusEvent{}
 	err := json.Unmarshal(message, &jobStatus)
 	if err != nil {
-		log.Logger.Printf("received invalid job event  %+v", jobStatus)
+		log.Logger.Printf("received invalid job event  %+v", err)
 		return err
 	}
 
