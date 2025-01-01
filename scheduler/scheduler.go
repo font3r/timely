@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"sync"
 	"time"
 	log "timely/logger"
 
@@ -48,6 +47,7 @@ var (
 )
 
 const SchedulerTickDelay = time.Second
+const MAX_SCHEDULES_CONCURRENCY = 2
 
 var Supports []string
 
@@ -89,19 +89,18 @@ func (s *Scheduler) processTick(ctx context.Context) error {
 		return errors.Join(ErrFetchAwaitingSchedules, err)
 	}
 
-	wg := sync.WaitGroup{}
-	wg.Add(len(schedules)) // TODO: probably this should be limited
-	defer wg.Wait()
+	sem := make(chan struct{}, MAX_SCHEDULES_CONCURRENCY)
 
 	for _, schedule := range schedules {
-		go s.processSchedule(ctx, schedule, &wg)
+		sem <- struct{}{}
+		go s.processSchedule(ctx, schedule, sem)
 	}
 
 	return nil
 }
 
-func (s *Scheduler) processSchedule(ctx context.Context, schedule *Schedule, wg *sync.WaitGroup) {
-	defer wg.Done()
+func (s *Scheduler) processSchedule(ctx context.Context, schedule *Schedule, sem chan struct{}) {
+	defer func() { <-sem }()
 	schedule.Start(time.Now)
 	jobRun := NewJobRun(schedule.Id, schedule.GroupId, time.Now)
 

@@ -13,6 +13,8 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
+const WORKER_COUNT = 20
+
 type AsyncTransportDriver interface {
 	Publish(ctx context.Context, exchange, routingKey string, message any) error
 	Subscribe(ctx context.Context, queue string, handle func(message []byte) error) error
@@ -23,7 +25,7 @@ type AsyncTransportDriver interface {
 
 type RabbitMqTransport struct {
 	connection        *amqp.Connection
-	channel           *amqp.Channel // TODO: performace - support for multiple channels - channel is very fragile, closed on error
+	channel           *amqp.Channel
 	declaredQueues    []string
 	declaredExchanges []string
 }
@@ -35,9 +37,8 @@ func NewRabbitMqConnection(url string) (*RabbitMqTransport, error) {
 		return nil, err
 	}
 
-	channel, err := connection.Channel()
+	channel, err := createChannel(connection)
 	if err != nil {
-		log.Logger.Printf("error during opening rabbitmq channel - %v", err)
 		return nil, err
 	}
 
@@ -47,6 +48,16 @@ func NewRabbitMqConnection(url string) (*RabbitMqTransport, error) {
 	}
 
 	return transport, nil
+}
+
+func createChannel(conn *amqp.Connection) (*amqp.Channel, error) {
+	channel, err := conn.Channel()
+	if err != nil {
+		log.Logger.Printf("error during opening rabbitmq channel - %v", err)
+		return nil, err
+	}
+
+	return channel, nil
 }
 
 func (t *RabbitMqTransport) Publish(ctx context.Context, exchange, routingKey string, message any) error {
@@ -83,11 +94,19 @@ func (t *RabbitMqTransport) Subscribe(ctx context.Context, queue string, handle 
 		false, false, false, amqp.Table{})
 	if err != nil {
 		log.Logger.Printf("error during consume - %v\n", err)
-		return err
+		log.Logger.Println("recreating channel")
+		channel, err := createChannel(t.connection)
+		if err != nil {
+			return err
+		}
+
+		t.channel = channel
 	}
 
+	sem := make(chan struct{}, WORKER_COUNT)
+
 	for {
-		// TODO: probably it would be safer to limit number of goroutines
+		sem <- struct{}{}
 		go func(delivery amqp.Delivery, handle func(message []byte) error) {
 			err := handle(delivery.Body)
 
@@ -104,6 +123,8 @@ func (t *RabbitMqTransport) Subscribe(ctx context.Context, queue string, handle 
 					log.Logger.Printf("error during ack - %v\n", err)
 				}
 			}
+
+			<-sem
 		}(<-delivery, handle)
 	}
 }
