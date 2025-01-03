@@ -8,6 +8,7 @@ import (
 	"net/http"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 type SyncTransportDriver interface {
@@ -15,6 +16,7 @@ type SyncTransportDriver interface {
 }
 
 type HttpTransport struct {
+	Logger *zap.SugaredLogger
 }
 
 type ScheduleJobRequest struct {

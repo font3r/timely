@@ -8,9 +8,8 @@ import (
 	"strings"
 	"time"
 
-	log "timely/logger"
-
 	amqp "github.com/rabbitmq/amqp091-go"
+	"go.uber.org/zap"
 )
 
 const WORKER_COUNT = 20
@@ -28,16 +27,17 @@ type RabbitMqTransport struct {
 	channel           *amqp.Channel
 	declaredQueues    []string
 	declaredExchanges []string
+	logger            *zap.SugaredLogger
 }
 
-func NewRabbitMqConnection(url string) (*RabbitMqTransport, error) {
+func NewRabbitMqConnection(url string, logger *zap.SugaredLogger) (*RabbitMqTransport, error) {
 	connection, err := amqp.Dial(url)
 	if err != nil {
-		log.Logger.Printf("error during opening rabbitmq connection - %v", err)
+		logger.Errorf("error during opening rabbitmq connection - %v", err)
 		return nil, err
 	}
 
-	channel, err := createChannel(connection)
+	channel, err := createChannel(connection, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -45,15 +45,16 @@ func NewRabbitMqConnection(url string) (*RabbitMqTransport, error) {
 	transport := &RabbitMqTransport{
 		connection: connection,
 		channel:    channel,
+		logger:     logger,
 	}
 
 	return transport, nil
 }
 
-func createChannel(conn *amqp.Connection) (*amqp.Channel, error) {
+func createChannel(conn *amqp.Connection, logger *zap.SugaredLogger) (*amqp.Channel, error) {
 	channel, err := conn.Channel()
 	if err != nil {
-		log.Logger.Printf("error during opening rabbitmq channel - %v", err)
+		logger.Errorf("error during opening rabbitmq channel - %v", err)
 		return nil, err
 	}
 
@@ -77,7 +78,7 @@ func (t *RabbitMqTransport) Publish(ctx context.Context, exchange, routingKey st
 		routingKey, false, false, msg)
 
 	if err != nil {
-		log.Logger.Printf("publish error - %v", err)
+		t.logger.Errorf("publish error - %v", err)
 		return err
 	}
 
@@ -93,9 +94,9 @@ func (t *RabbitMqTransport) Subscribe(ctx context.Context, queue string, handle 
 	delivery, err := t.channel.ConsumeWithContext(ctx, queue, "", false,
 		false, false, false, amqp.Table{})
 	if err != nil {
-		log.Logger.Printf("error during consume - %v\n", err)
-		log.Logger.Println("recreating channel")
-		channel, err := createChannel(t.connection)
+		t.logger.Errorf("error during consume - %v", err)
+		t.logger.Infoln("recreating channel")
+		channel, err := createChannel(t.connection, t.logger)
 		if err != nil {
 			return err
 		}
@@ -111,16 +112,16 @@ func (t *RabbitMqTransport) Subscribe(ctx context.Context, queue string, handle 
 			err := handle(delivery.Body)
 
 			if err != nil {
-				log.Logger.Printf("error during consumer processing - %v\n", err)
+				t.logger.Errorf("error during consumer processing - %v", err)
 
 				err = delivery.Nack(true, false)
 				if err != nil {
-					log.Logger.Printf("error during nack - %v\n", err)
+					t.logger.Errorf("error during nack - %v", err)
 				}
 			} else {
 				err = delivery.Ack(true)
 				if err != nil {
-					log.Logger.Printf("error during ack - %v\n", err)
+					t.logger.Errorf("error during ack - %v", err)
 				}
 			}
 
@@ -140,7 +141,7 @@ func (t *RabbitMqTransport) CreateQueue(queue string) error {
 		false, amqp.Table{})
 
 	if err != nil {
-		log.Logger.Printf("creating queue error %s - %v\n", string(ExchangeJobStatus), err)
+		t.logger.Infof("creating queue error %s - %v", string(ExchangeJobStatus), err)
 		return err
 	}
 
@@ -159,7 +160,7 @@ func (t *RabbitMqTransport) CreateExchange(exchange string) error {
 	err := t.channel.ExchangeDeclare(exchange, "direct", true, false,
 		false, false, amqp.Table{})
 	if err != nil {
-		log.Logger.Printf("creating exchange error %s - %v\n", string(ExchangeJobSchedule), err)
+		t.logger.Infof("creating exchange error %s - %v", string(ExchangeJobSchedule), err)
 		return err
 	}
 
@@ -172,7 +173,7 @@ func (t *RabbitMqTransport) BindQueue(queue, exchange, routingKey string) error 
 	err := t.channel.QueueBind(queue, routingKey, exchange, false, amqp.Table{})
 
 	if err != nil {
-		log.Logger.Printf("exchange %s queue %s with routing key %s binding error - %v\n", exchange, queue, routingKey, err)
+		t.logger.Infof("exchange %s queue %s with routing key %s binding error - %v", exchange, queue, routingKey, err)
 		return err
 	}
 

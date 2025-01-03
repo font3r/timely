@@ -10,11 +10,11 @@ import (
 	"math/rand"
 	"net/http"
 	"time"
-	log "timely/logger"
 	"timely/scheduler"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/mux"
+	"go.uber.org/zap"
 )
 
 type JobStatusEvent struct {
@@ -46,6 +46,14 @@ const statusAddress = "http://localhost:7468/api/v1/schedules/status"
 
 func main() {
 	r := mux.NewRouter()
+	baseLogger, err := zap.NewDevelopment()
+	if err != nil {
+		panic(fmt.Sprintf("can't initialize zap logger: %v", err))
+	}
+
+	logger := baseLogger.Sugar()
+	defer logger.Sync()
+
 	srv := &http.Server{
 		Addr:    ":5001",
 		Handler: r,
@@ -63,31 +71,31 @@ func main() {
 			return
 		}
 
-		go processSyncJob(event)
+		go processSyncJob(event, logger)
 		w.WriteHeader(http.StatusAccepted)
 	}).Methods("POST")
 
-	StartRabbitMq(context.Background())
+	StartRabbitMq(context.Background(), logger)
 
-	log.Logger.Printf("listening on %v", srv.Addr)
+	logger.Infof("listening on %v", srv.Addr)
 	if err := srv.ListenAndServe(); err != nil {
-		log.Logger.Println(err)
+		logger.Errorln(err)
 	}
 }
 
-func StartRabbitMq(ctx context.Context) {
-	log.Logger.Println("starting ...")
+func StartRabbitMq(ctx context.Context, logger *zap.SugaredLogger) {
+	logger.Infoln("starting ...")
 
-	tra, err := scheduler.NewRabbitMqConnection("amqp://guest:guest@localhost:5672")
+	tra, err := scheduler.NewRabbitMqConnection("amqp://guest:guest@localhost:5672", logger)
 	if err != nil {
 		panic(fmt.Sprintf("test-app: create transport error - %s", err))
 	}
 
 	for _, jobSlug := range []string{"process-user-notifications"} {
-		log.Logger.Printf("test app registered %s", jobSlug)
+		logger.Infof("test app registered %s", jobSlug)
 		go func(jobSlug string) {
 			err = tra.Subscribe(ctx, jobSlug, func(message []byte) error {
-				log.Logger.Printf("requested job start with slug %s", jobSlug)
+				logger.Infof("requested job start with slug %s", jobSlug)
 
 				var event ScheduleJobEvent
 				err = json.Unmarshal(message, &event)
@@ -95,23 +103,23 @@ func StartRabbitMq(ctx context.Context) {
 					return err
 				}
 
-				err = processAsyncJob(ctx, tra, event)
+				err = processAsyncJob(ctx, tra, event, logger)
 				if err != nil {
-					log.Logger.Printf("error during job processing - %s", err)
+					logger.Errorf("error during job processing - %s", err)
 				}
 
 				return nil
 			})
 
 			if err != nil {
-				log.Logger.Printf("error during subscribe for job %s - %s", jobSlug, err)
+				logger.Errorf("error during subscribe for job %s - %s", jobSlug, err)
 				return
 			}
 		}(jobSlug)
 	}
 }
 
-func processSyncJob(event ScheduleJobEvent) {
+func processSyncJob(event ScheduleJobEvent, logger *zap.SugaredLogger) {
 	for i := 0; i < 5; i++ {
 		if jitterFail() {
 			jobFailed := JobStatusEvent{
@@ -125,23 +133,15 @@ func processSyncJob(event ScheduleJobEvent) {
 			json, _ := json.Marshal(jobFailed)
 			_, err := http.Post(statusAddress, "application/json", bytes.NewBuffer(json))
 			if err != nil {
-				log.Logger.Printf("received error on send job processing event %v\n", err)
+				logger.Errorf("received error on send job processing event %v", err)
 				break
 			}
 
-<<<<<<< Updated upstream
-<<<<<<< Updated upstream
-			log.Logger.Println("sent job failed event")
-=======
-=======
->>>>>>> Stashed changes
-			logger.Info("sent job failed event")
 			logger.Infoln("sent job failed event")
->>>>>>> Stashed changes
 			return
 		}
 
-		log.Logger.Println("job processing")
+		logger.Infoln("job processing")
 		time.Sleep(time.Second)
 	}
 
@@ -156,13 +156,14 @@ func processSyncJob(event ScheduleJobEvent) {
 	json, _ := json.Marshal(jobSuccess)
 	_, err := http.Post(statusAddress, "application/json", bytes.NewBuffer(json))
 	if err != nil {
-		log.Logger.Printf("received error on send job processing event %v\n", err)
+		logger.Errorf("received error on send job processing event %v", err)
 	}
 
-	log.Logger.Println("sent success event")
+	logger.Infoln("sent success event")
 }
 
-func processAsyncJob(ctx context.Context, tra *scheduler.RabbitMqTransport, event ScheduleJobEvent) error {
+func processAsyncJob(ctx context.Context, tra *scheduler.RabbitMqTransport, event ScheduleJobEvent,
+	logger *zap.SugaredLogger) error {
 	for i := 0; i < 5; i++ {
 		if jitterFail() {
 			err := tra.Publish(ctx, string(scheduler.ExchangeJobStatus),
@@ -175,13 +176,13 @@ func processAsyncJob(ctx context.Context, tra *scheduler.RabbitMqTransport, even
 				})
 
 			if err != nil {
-				log.Logger.Printf("error during publishing job status %v", err)
+				logger.Errorf("error during publishing job status %v", err)
 			}
 
 			return errors.New("jitter job failure")
 		}
 
-		log.Logger.Println("job processing")
+		logger.Infoln("job processing")
 		time.Sleep(time.Second)
 	}
 
@@ -195,7 +196,7 @@ func processAsyncJob(ctx context.Context, tra *scheduler.RabbitMqTransport, even
 		})
 
 	if err != nil {
-		log.Logger.Printf("error publishing during job status %v", err)
+		logger.Errorf("error publishing during job status %v", err)
 	}
 
 	return nil
