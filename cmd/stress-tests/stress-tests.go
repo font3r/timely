@@ -69,9 +69,9 @@ func main() {
 		_, err := http.Post(timelyAddress.String(), "application/json", bytes.NewBuffer(json))
 
 		if err != nil {
-			fmt.Printf("fail during creating job %s - %v\n", schedule.Job.Slug, err)
+			fmt.Printf("fail during creating job %s - %v", schedule.Job.Slug, err)
 		}
 
-		fmt.Printf("created job %s\n", schedule.Job.Slug)
+		fmt.Printf("created job %s", schedule.Job.Slug)
 	}
 }

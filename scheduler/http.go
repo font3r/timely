@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	log "timely/logger"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 type SyncTransportDriver interface {
@@ -16,6 +16,7 @@ type SyncTransportDriver interface {
 }
 
 type HttpTransport struct {
+	Logger *zap.SugaredLogger
 }
 
 type ScheduleJobRequest struct {
@@ -38,7 +39,7 @@ func (ht HttpTransport) Start(ctx context.Context, url string, request ScheduleJ
 		return err
 	}
 
-	log.Logger.Printf("sending schedule start http request to %s\n", url)
+	ht.Logger.Infof("sending schedule start http request to %s", url)
 	resp, err := http.Post(url, ApplicationJson, bytes.NewBuffer(body))
 	if err != nil {
 		return fmt.Errorf("error during sending post to %s - %w", url, err)
