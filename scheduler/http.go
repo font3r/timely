@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	log "timely/logger"
 
 	"github.com/google/uuid"
 )
@@ -38,7 +37,6 @@ func (ht HttpTransport) Start(ctx context.Context, url string, request ScheduleJ
 		return err
 	}
 
-	log.Logger.Printf("sending schedule start http request to %s\n", url)
 	resp, err := http.Post(url, ApplicationJson, bytes.NewBuffer(body))
 	if err != nil {
 		return fmt.Errorf("error during sending post to %s - %w", url, err)

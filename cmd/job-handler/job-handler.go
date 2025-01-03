@@ -129,7 +129,15 @@ func processSyncJob(event ScheduleJobEvent) {
 				break
 			}
 
+<<<<<<< Updated upstream
+<<<<<<< Updated upstream
 			log.Logger.Println("sent job failed event")
+=======
+=======
+>>>>>>> Stashed changes
+			logger.Info("sent job failed event")
+			logger.Infoln("sent job failed event")
+>>>>>>> Stashed changes
 			return
 		}
 
