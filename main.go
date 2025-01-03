@@ -5,24 +5,32 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	log "timely/logger"
 	"timely/scheduler"
 
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 )
 
 var supported []string
 
 type Application struct {
 	Scheduler *scheduler.Scheduler
+	Logger    *zap.SugaredLogger
 }
 
 func main() {
 	ctx := context.Background()
+	baseLogger, err := zap.NewDevelopment()
+	if err != nil {
+		panic(fmt.Sprintf("can't initialize zap logger: %v", err))
+	}
 
-	loadConfig() // TODO: config validation
+	logger := baseLogger.Sugar()
+	defer logger.Sync()
+
+	loadConfig(logger) // TODO: config validation
 
 	r := mux.NewRouter()
 	srv := &http.Server{
@@ -34,16 +42,16 @@ func main() {
 		)(r),
 	}
 
-	app := buildDependencies(ctx)
+	app := buildDependencies(ctx, logger)
 	registerApiRoutes(r, app)
 
-	log.Logger.Printf("listening on %v", srv.Addr)
+	logger.Infof("listening on %v", srv.Addr)
 	if err := srv.ListenAndServe(); err != nil {
-		log.Logger.Println(err)
+		logger.Error(err)
 	}
 }
 
-func loadConfig() {
+func loadConfig(log *zap.SugaredLogger) {
 	viper.SetConfigName("config")
 	viper.SetConfigType("json")
 	viper.AddConfigPath(".")
@@ -51,20 +59,20 @@ func loadConfig() {
 	if err := viper.ReadInConfig(); err != nil {
 		var configFileNotFoundError viper.ConfigFileNotFoundError
 		if errors.As(err, &configFileNotFoundError) {
-			log.Logger.Panicf("no config file found - %s", err)
+			log.Panicf("no config file found - %s", err)
 		} else {
-			log.Logger.Panicf("config file error - %s", err)
+			log.Panicf("config file error - %s", err)
 		}
 	}
 }
 
-func buildDependencies(ctx context.Context) Application {
+func buildDependencies(ctx context.Context, logger *zap.SugaredLogger) Application {
 	var pgStorage *scheduler.Pgsql
 	if viper.IsSet("database.postgres") {
 		pg, err := scheduler.NewPgsqlConnection(ctx,
 			viper.GetString("database.postgres.connectionString"))
 		if err != nil {
-			log.Logger.Fatal(err)
+			logger.Panic(err)
 		}
 
 		pgStorage = pg
@@ -73,14 +81,14 @@ func buildDependencies(ctx context.Context) Application {
 	var rabbitMqTransport *scheduler.RabbitMqTransport
 	if viper.IsSet("transport.rabbitmq") && viper.GetBool("transport.rabbitmq.enabled") {
 		rabbitMq, err := scheduler.NewRabbitMqConnection(
-			viper.GetString("transport.rabbitmq.connectionString"))
+			viper.GetString("transport.rabbitmq.connectionString"), logger)
 		if err != nil {
-			panic(fmt.Sprintf("create transport error %s", err))
+			logger.Panicf(fmt.Sprintf("create transport error %s", err))
 		}
 
 		err = createTransportDependencies(rabbitMq)
 		if err != nil {
-			panic(fmt.Sprintf("creating internal exchanges/queues error - %v", err))
+			logger.Panicf(fmt.Sprintf("creating internal exchanges/queues error - %v", err))
 		}
 
 		rabbitMqTransport = rabbitMq
@@ -89,13 +97,16 @@ func buildDependencies(ctx context.Context) Application {
 
 	var httpTransport scheduler.HttpTransport
 	if viper.IsSet("transport.http") && viper.GetBool("transport.http.enabled") {
-		httpTransport = scheduler.HttpTransport{}
+		httpTransport = scheduler.HttpTransport{
+			Logger: logger,
+		}
 		supported = append(supported, "http")
 	}
 
 	return Application{
 		Scheduler: scheduler.Start(ctx, pgStorage, rabbitMqTransport, httpTransport,
-			supported),
+			supported, logger),
+		Logger: logger,
 	}
 }
 

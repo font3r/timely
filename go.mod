@@ -16,6 +16,7 @@ require (
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.34.0
 	github.com/wiremock/go-wiremock v1.8.0
 	github.com/wiremock/wiremock-testcontainers-go v1.0.0-alpha-9
+	go.uber.org/zap v1.27.0
 )
 
 require (

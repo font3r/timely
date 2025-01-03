@@ -7,9 +7,9 @@ import (
 	"fmt"
 	"slices"
 	"time"
-	log "timely/logger"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 type Scheduler struct {
@@ -17,6 +17,7 @@ type Scheduler struct {
 	Storage        StorageDriver
 	AsyncTransport AsyncTransportDriver
 	SyncTransport  SyncTransportDriver
+	logger         *zap.SugaredLogger
 }
 
 type JobStatusEvent struct {
@@ -52,18 +53,19 @@ const MAX_SCHEDULES_CONCURRENCY = 2
 var Supports []string
 
 func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTransportDriver,
-	syncTransport SyncTransportDriver, supports []string) *Scheduler {
+	syncTransport SyncTransportDriver, supports []string, logger *zap.SugaredLogger) *Scheduler {
 
 	scheduler := Scheduler{
 		Id:             uuid.New(),
 		Storage:        storage,
 		AsyncTransport: asyncTransport,
 		SyncTransport:  syncTransport,
+		logger:         logger,
 	}
 
 	Supports = supports
 
-	log.Logger.Printf("starting scheduler with id %s\n", scheduler.Id)
+	logger.Infof("starting scheduler with id %s", scheduler.Id)
 
 	if slices.Contains(Supports, "rabbitmq") {
 		go scheduler.processJobEvents(ctx)
@@ -73,7 +75,7 @@ func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTrans
 		for {
 			err := scheduler.processTick(ctx)
 			if err != nil {
-				log.Logger.Printf("processing scheduler tick error - %v", err)
+				logger.Infof("processing scheduler tick error - %v", err)
 			}
 
 			time.Sleep(SchedulerTickDelay)
@@ -116,10 +118,10 @@ func (s *Scheduler) processSchedule(ctx context.Context, schedule *Schedule, sem
 	}
 
 	if schueduleStartErr != nil {
-		log.Logger.Printf("failed to start job - %v", schueduleStartErr)
+		s.logger.Errorf("failed to start job - %v", schueduleStartErr)
 		groupRuns, innerErr := s.Storage.GetJobRunGroup(ctx, schedule.Id, jobRun.GroupId)
 		if innerErr != nil {
-			log.Logger.Printf("error getting job run group - %v\n", innerErr)
+			s.logger.Errorf("error getting job run group - %v", innerErr)
 			jobRun.Failed(errors.Join(schueduleStartErr, innerErr).Error(), time.Now)
 			schedule.Failed(1, time.Now) // TODO: probably infinite loop
 		} else {
@@ -129,20 +131,20 @@ func (s *Scheduler) processSchedule(ctx context.Context, schedule *Schedule, sem
 		}
 
 	} else {
-		log.Logger.Printf("scheduled job %s/%s, run %s", schedule.Job.Id, schedule.Job.Slug, jobRun.Id)
+		s.logger.Infof("scheduled job %s/%s, run %s", schedule.Job.Id, schedule.Job.Slug, jobRun.Id)
 	}
 
 	// TODO: starting schedule should be transactional so outbox is most likely needed for async transport
 	// Job run has to be created before starting job because we can hit race condition with job statuses
 	err := s.Storage.AddJobRun(ctx, jobRun)
 	if err != nil {
-		log.Logger.Printf("error adding job run - %v\n", err)
+		s.logger.Errorf("error adding job run - %v", err)
 		return
 	}
 
 	err = s.Storage.UpdateSchedule(ctx, *schedule)
 	if err != nil {
-		log.Logger.Printf("error updating schedule status - %v\n", err)
+		s.logger.Errorf("error updating schedule status - %v", err)
 		return
 	}
 }
@@ -188,9 +190,9 @@ func (s *Scheduler) handleRabbitMq(ctx context.Context, schedule *Schedule, jobR
 
 func (s *Scheduler) processJobEvents(ctx context.Context) {
 	err := s.AsyncTransport.Subscribe(ctx, string(QueueJobStatus), func(message []byte) error {
-		err := HandleJobEvent(ctx, message, s.Storage)
+		err := HandleJobEvent(ctx, message, s.Storage, s.logger)
 		if err != nil {
-			log.Logger.Printf("error during job event processing - %v\n", err)
+			s.logger.Errorf("error during job event processing - %v", err)
 			return err
 		}
 
@@ -198,20 +200,20 @@ func (s *Scheduler) processJobEvents(ctx context.Context) {
 	})
 
 	if err != nil {
-		log.Logger.Printf("error during subscribing to process job events - %v\n", err)
+		s.logger.Errorf("error during subscribing to process job events - %v", err)
 		return
 	}
 }
 
-func HandleJobEvent(ctx context.Context, message []byte, storage StorageDriver) error {
+func HandleJobEvent(ctx context.Context, message []byte, storage StorageDriver, logger *zap.SugaredLogger) error {
 	jobStatus := JobStatusEvent{}
 	err := json.Unmarshal(message, &jobStatus)
 	if err != nil {
-		log.Logger.Printf("received invalid job event  %+v", err)
+		logger.Infof("received invalid job event  %+v", err)
 		return err
 	}
 
-	log.Logger.Printf("received status %+v", jobStatus)
+	logger.Infof("received status %+v", jobStatus)
 
 	schedule, err := storage.GetScheduleById(ctx, jobStatus.ScheduleId)
 	if err != nil {

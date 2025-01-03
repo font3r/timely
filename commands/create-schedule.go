@@ -4,10 +4,10 @@ import (
 	"context"
 	"slices"
 	"time"
-	log "timely/logger"
 	"timely/scheduler"
 
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 type CreateScheduleCommand struct {
@@ -38,6 +38,7 @@ type ScheduleConfiguration struct {
 type CreateScheduleHandler struct {
 	Storage        scheduler.StorageDriver
 	AsyncTransport scheduler.AsyncTransportDriver
+	Logger         *zap.SugaredLogger
 }
 
 type CreateScheduleResponse struct {
@@ -75,7 +76,7 @@ func (h CreateScheduleHandler) Handle(ctx context.Context, c CreateScheduleComma
 	if c.Configuration.TransportType == scheduler.Rabbitmq {
 		err := h.createTransportDependencies(schedule)
 		if err != nil {
-			log.Logger.Printf("error during creating schedule %+v", err)
+			h.Logger.Errorf("error during creating schedule %+v", err)
 			h.Storage.DeleteScheduleById(ctx, schedule.Id)
 			return nil, ErrTransportError
 		}
