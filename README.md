@@ -19,6 +19,6 @@ TODO:
 - [x] support for single use schedules with delay (similar to ASB scheduled message)
 - [ ] auth
 - [ ] admin panel
-- [ ] data retention
+- [ ] data retention + rabbitmq cleanup for finished schedules
 - [ ] integration tests
 - [ ] support for other async transports (eg. Kafka)
