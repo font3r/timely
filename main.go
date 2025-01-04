@@ -80,7 +80,7 @@ func buildDependencies(ctx context.Context, logger *zap.SugaredLogger) Applicati
 
 	var rabbitMqTransport *scheduler.RabbitMqTransport
 	if viper.IsSet("transport.rabbitmq") && viper.GetBool("transport.rabbitmq.enabled") {
-		rabbitMq, err := scheduler.NewRabbitMqConnection(
+		rabbitMq, err := scheduler.NewRabbitMqTransport(
 			viper.GetString("transport.rabbitmq.connectionString"), logger)
 		if err != nil {
 			logger.Panicf(fmt.Sprintf("create transport error %s", err))
