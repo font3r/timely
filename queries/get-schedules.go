@@ -33,7 +33,7 @@ type JobDto struct {
 }
 
 func (h GetSchedulesHandler) Handle(ctx context.Context, q GetSchedules) ([]ScheduleDto, error) {
-	schedules, err := h.Storage.GetPaged(ctx, q.Page, q.PageSize)
+	schedules, err := h.Storage.GetSchedulesPaged(ctx, q.Page, q.PageSize)
 
 	if err != nil {
 		return []ScheduleDto{}, err

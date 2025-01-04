@@ -110,7 +110,7 @@ func (s storageDriverFake) GetAwaitingSchedules(ctx context.Context) ([]*schedul
 	panic("implement me")
 }
 
-func (s storageDriverFake) GetPaged(ctx context.Context, page int, pageSize int) ([]*scheduler.Schedule, error) {
+func (s storageDriverFake) GetSchedulesPaged(ctx context.Context, page int, pageSize int) ([]*scheduler.Schedule, error) {
 	panic("implement me")
 }
 
@@ -143,6 +143,10 @@ func (s storageDriverFake) GetJobRunGroup(ctx context.Context, scheduleId uuid.U
 }
 
 func (s storageDriverFake) GetJobRuns(ctx context.Context, scheduleId uuid.UUID) ([]*scheduler.JobRun, error) {
+	panic("implement me")
+}
+
+func (s storageDriverFake) GetStaleJobs(ctx context.Context) ([]scheduler.StaleJobRun, error) {
 	panic("implement me")
 }
 

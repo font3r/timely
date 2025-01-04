@@ -47,7 +47,8 @@ var (
 		Msg:  "fetch awaiting schedules failed"}
 )
 
-const SchedulerTickDelay = time.Second
+const schedulerTickDelay = time.Second
+const getStaleJobsDelay = time.Second * 5
 const MAX_SCHEDULES_CONCURRENCY = 2
 
 var Supports []string
@@ -71,6 +72,8 @@ func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTrans
 		go scheduler.processJobEvents(ctx)
 	}
 
+	go scheduler.staleJobSearch(ctx)
+
 	go func() {
 		for {
 			err := scheduler.processTick(ctx)
@@ -78,11 +81,27 @@ func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTrans
 				logger.Infof("processing scheduler tick error - %v", err)
 			}
 
-			time.Sleep(SchedulerTickDelay)
+			time.Sleep(schedulerTickDelay)
 		}
 	}()
 
 	return &scheduler
+}
+
+func (s *Scheduler) staleJobSearch(ctx context.Context) {
+	s.logger.Info("starting stale jobs searching")
+
+	// TODO: how should we handle stale jobs
+	for {
+		staleJobs, err := s.Storage.GetStaleJobs(ctx)
+		if err != nil {
+			s.logger.Error("error during getting stale jobs %v", err)
+			continue
+		}
+
+		s.logger.Warnf("found %d stale schedules", len(staleJobs))
+		time.Sleep(getStaleJobsDelay)
+	}
 }
 
 func (s *Scheduler) processTick(ctx context.Context) error {
@@ -118,10 +137,10 @@ func (s *Scheduler) processSchedule(ctx context.Context, schedule *Schedule, sem
 	}
 
 	if schueduleStartErr != nil {
-		s.logger.Errorf("failed to start job - %v", schueduleStartErr)
+		s.logger.Errorf("failed to start job for schedule %s - %v", schedule.Id, schueduleStartErr)
 		groupRuns, innerErr := s.Storage.GetJobRunGroup(ctx, schedule.Id, jobRun.GroupId)
 		if innerErr != nil {
-			s.logger.Errorf("error getting job run group - %v", innerErr)
+			s.logger.Errorf("error getting job run group for schedule %s - %v", schedule.Id, innerErr)
 			jobRun.Failed(errors.Join(schueduleStartErr, innerErr).Error(), time.Now)
 			schedule.Failed(1, time.Now) // TODO: probably infinite loop
 		} else {
@@ -250,7 +269,7 @@ func HandleJobEvent(ctx context.Context, message []byte, storage StorageDriver, 
 	case string(JobSucceed):
 		{
 			jobRun.Succeed(time.Now)
-			schedule.Succeed(time.Now) // TODO: after one time schedules we have to clean some transport methods eg. rabbit
+			schedule.Succeed(time.Now)
 		}
 	}
 

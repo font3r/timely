@@ -46,4 +46,8 @@ CREATE TABLE IF NOT EXISTS job_runs
     end_date TIMESTAMP WITH TIME ZONE
 );
 
-CREATE INDEX IF NOT EXISTS status_next_execution_date_idx ON schedules(status, next_execution_date ASC)
+CREATE INDEX IF NOT EXISTS schedules_status_next_execution_date_idx 
+    ON schedules(status, next_execution_date ASC);
+
+CREATE INDEX IF NOT EXISTS job_runs_status_start_date_idx 
+    ON job_runs(status, start_date ASC);
