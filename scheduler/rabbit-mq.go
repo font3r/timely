@@ -6,6 +6,7 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -27,7 +28,7 @@ type AsyncTransportDriver interface {
 
 type RabbitMqTransport struct {
 	rcvConnection *recoverableConnection
-	channels      map[string]*amqp.Channel
+	channels      *sync.Map
 
 	declaredQueues    []string
 	declaredExchanges []string
@@ -46,9 +47,10 @@ func NewRabbitMqTransport(url string, logger *zap.SugaredLogger) (*RabbitMqTrans
 		return nil, err
 	}
 
+	channelStore := &sync.Map{}
 	transport := &RabbitMqTransport{
 		rcvConnection: conn,
-		channels:      make(map[string]*amqp.Channel),
+		channels:      channelStore,
 		logger:        logger,
 	}
 
@@ -106,8 +108,8 @@ func connect(url string) (*amqp.Connection, error) {
 }
 
 func (t *RabbitMqTransport) getChannel(key string) (*amqp.Channel, error) {
-	if channel, exists := t.channels[key]; exists {
-		return channel, nil
+	if channel, exists := t.channels.Load(key); exists {
+		return channel.(*amqp.Channel), nil
 	}
 
 	channel, err := t.createChannel(key)
@@ -115,11 +117,12 @@ func (t *RabbitMqTransport) getChannel(key string) (*amqp.Channel, error) {
 		return nil, err
 	}
 
-	t.channels[key] = channel
+	t.channels.Store(key, channel)
 	return channel, nil
 }
 
 func (t *RabbitMqTransport) createChannel(key string) (*amqp.Channel, error) {
+	//t.logger.Infof("creating new channel for %s", key)
 	channel, err := t.rcvConnection.connection.Channel()
 	if err != nil {
 		t.logger.Errorf("unable to open connection channel %s", err.Error())
@@ -146,7 +149,7 @@ func (t *RabbitMqTransport) createChannel(key string) (*amqp.Channel, error) {
 				time.Sleep(time.Second)
 				continue
 			}
-			t.channels[key] = channel
+			t.channels.Store(key, channel)
 			break
 		}
 		t.logger.Infof("created a new %s channel", key)
