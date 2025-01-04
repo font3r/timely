@@ -99,7 +99,10 @@ func (s *Scheduler) staleJobSearch(ctx context.Context) {
 			continue
 		}
 
-		s.logger.Warnf("found %d stale schedules", len(staleJobs))
+		if len(staleJobs) > 0 {
+			s.logger.Warnf("found %d stale schedules", len(staleJobs))
+		}
+
 		time.Sleep(getStaleJobsDelay)
 	}
 }
