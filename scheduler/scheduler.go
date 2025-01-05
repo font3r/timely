@@ -69,7 +69,7 @@ func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTrans
 	logger.Infof("starting scheduler with id %s", scheduler.Id)
 
 	if slices.Contains(Supports, "rabbitmq") {
-		go scheduler.processJobEvents(ctx)
+		go scheduler.processJobStatusEvents(ctx)
 	}
 
 	go scheduler.staleJobSearch(ctx)
@@ -215,24 +215,28 @@ func (s *Scheduler) handleRabbitMq(ctx context.Context, schedule *Schedule, jobR
 }
 
 // TODO: this probably should be external dependency that signals scheduler about event
-func (s *Scheduler) processJobEvents(ctx context.Context) {
-	err := s.AsyncTransport.Subscribe(ctx, string(JobStatusQueue), func(message []byte) error {
-		err := HandleJobEvent(ctx, message, s.Storage, s.logger)
+func (s *Scheduler) processJobStatusEvents(ctx context.Context) {
+	for {
+		err := s.AsyncTransport.Subscribe(ctx, string(JobStatusQueue), func(message []byte) error {
+			err := HandleJobStatusEvent(ctx, message, s.Storage, s.logger)
+			if err != nil {
+				s.logger.Errorf("error during job status event processing - %v", err)
+				return err
+			}
+
+			return nil
+		})
+
 		if err != nil {
-			s.logger.Errorf("error during job event processing - %v", err)
-			return err
+			s.logger.Errorf("error during subscribing to process job status events - %v", err)
+			time.Sleep(time.Second)
+		} else {
+			break
 		}
-
-		return nil
-	})
-
-	if err != nil {
-		s.logger.Errorf("error during subscribing to process job events - %v", err)
-		return
 	}
 }
 
-func HandleJobEvent(ctx context.Context, message []byte, storage StorageDriver, logger *zap.SugaredLogger) error {
+func HandleJobStatusEvent(ctx context.Context, message []byte, storage StorageDriver, logger *zap.SugaredLogger) error {
 	jobStatus := JobStatusEvent{}
 	err := json.Unmarshal(message, &jobStatus)
 	if err != nil {

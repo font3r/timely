@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const jobsAmount = 1000
+const jobsAmount = 1
 
 func main() {
 	ctx := context.Background()
@@ -74,8 +74,8 @@ func processAsyncJob(ctx context.Context, tra *scheduler.RabbitMqTransport, even
 	logger *zap.SugaredLogger) error {
 	for i := 0; i < 5; i++ {
 		if jitterFail() {
-			err := tra.Publish(ctx, string(scheduler.ExchangeJobStatus),
-				string(scheduler.RoutingKeyJobStatus), libs.JobStatusEvent{
+			err := tra.Publish(ctx, string(scheduler.JobStatusExchange),
+				string(scheduler.JobStatusRoutingKey), libs.JobStatusEvent{
 					ScheduleId: event.ScheduleId,
 					GroupId:    event.GroupId,
 					JobRunId:   event.JobRunId,
@@ -94,8 +94,8 @@ func processAsyncJob(ctx context.Context, tra *scheduler.RabbitMqTransport, even
 		time.Sleep(time.Second)
 	}
 
-	err := tra.Publish(ctx, string(scheduler.ExchangeJobStatus),
-		string(scheduler.RoutingKeyJobStatus), libs.JobStatusEvent{
+	err := tra.Publish(ctx, string(scheduler.JobStatusExchange),
+		string(scheduler.JobStatusRoutingKey), libs.JobStatusEvent{
 			ScheduleId: event.ScheduleId,
 			GroupId:    event.GroupId,
 			JobRunId:   event.JobRunId,
@@ -114,7 +114,7 @@ func processAsyncJob(ctx context.Context, tra *scheduler.RabbitMqTransport, even
 }
 
 func generateJobNames(n int) []string {
-	jobName := "qtest-stress-async-job-%i"
+	jobName := "test-stress-async-job-%i"
 	jobs := make([]string, 0, n)
 
 	for i := 0; i < n; i++ {

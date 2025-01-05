@@ -48,9 +48,6 @@ type CreateScheduleResponse struct {
 var ErrUnsupportedTransportType = scheduler.Error{
 	Code: "UNSUPPORTED_TRANSPORT_TYPE",
 	Msg:  "unsupported transport type"}
-var ErrTransportError = scheduler.Error{
-	Code: "TRANSPORT_ERROR",
-	Msg:  "transport error"}
 
 func (h CreateScheduleHandler) Handle(ctx context.Context, c CreateScheduleCommand) (*CreateScheduleResponse, error) {
 	if !slices.Contains(scheduler.Supports, string(c.Configuration.TransportType)) {
