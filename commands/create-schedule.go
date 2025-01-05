@@ -72,16 +72,6 @@ func (h CreateScheduleHandler) Handle(ctx context.Context, c CreateScheduleComma
 		return nil, err
 	}
 
-	// TODO: that part probably should not be a part of command handler
-	if c.Configuration.TransportType == scheduler.Rabbitmq {
-		err := h.createTransportDependencies(schedule)
-		if err != nil {
-			h.Logger.Errorf("error during creating schedule %+v", err)
-			h.Storage.DeleteScheduleById(ctx, schedule.Id)
-			return nil, ErrTransportError
-		}
-	}
-
 	return &CreateScheduleResponse{Id: schedule.Id}, nil
 }
 
@@ -97,17 +87,4 @@ func getRetryPolicy(retryPolicyConf RetryPolicyConfiguration) (scheduler.RetryPo
 	}
 
 	return retryPolicy, nil
-}
-
-func (h CreateScheduleHandler) createTransportDependencies(schedule scheduler.Schedule) error {
-	if err := h.AsyncTransport.CreateQueue(schedule.Job.Slug); err != nil {
-		return err
-	}
-
-	if err := h.AsyncTransport.BindQueue(schedule.Job.Slug, string(scheduler.ExchangeJobSchedule),
-		schedule.Job.Slug); err != nil {
-		return err
-	}
-
-	return nil
 }

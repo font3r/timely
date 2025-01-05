@@ -111,23 +111,23 @@ func buildDependencies(ctx context.Context, logger *zap.SugaredLogger) Applicati
 }
 
 func createTransportDependencies(rmq *scheduler.RabbitMqTransport) error {
-	err := rmq.CreateExchange(string(scheduler.ExchangeJobSchedule))
+	err := rmq.CreateExchange(string(scheduler.JobScheduleExchange))
 	if err != nil {
 		return nil
 	}
 
-	err = rmq.CreateExchange(string(scheduler.ExchangeJobStatus))
+	err = rmq.CreateExchange(string(scheduler.JobStatusExchange))
 	if err != nil {
 		return err
 	}
 
-	err = rmq.CreateQueue(string(scheduler.QueueJobStatus))
+	err = rmq.CreateQueue(string(scheduler.JobStatusQueue))
 	if err != nil {
 		return err
 	}
 
-	err = rmq.BindQueue(string(scheduler.QueueJobStatus),
-		string(scheduler.ExchangeJobStatus), string(scheduler.RoutingKeyJobStatus))
+	err = rmq.BindQueue(string(scheduler.JobStatusQueue),
+		string(scheduler.JobStatusExchange), string(scheduler.JobStatusRoutingKey))
 	if err != nil {
 		return err
 	}

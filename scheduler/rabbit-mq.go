@@ -250,7 +250,7 @@ func (t *RabbitMqTransport) CreateQueue(queue string) error {
 		false, amqp.Table{})
 
 	if err != nil {
-		t.logger.Infof("creating queue error %s - %v", string(ExchangeJobStatus), err)
+		t.logger.Infof("creating queue error %s - %v", string(JobStatusExchange), err)
 		return err
 	}
 
@@ -274,7 +274,7 @@ func (t *RabbitMqTransport) CreateExchange(exchange string) error {
 	err = chann.ExchangeDeclare(exchange, "direct", true, false,
 		false, false, amqp.Table{})
 	if err != nil {
-		t.logger.Errorf("creating exchange error %s - %v", string(ExchangeJobSchedule), err)
+		t.logger.Errorf("creating exchange error %s - %v", string(JobScheduleExchange), err)
 		return err
 	}
 

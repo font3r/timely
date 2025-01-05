@@ -12,10 +12,10 @@ type RoutingKey string
 type PredefinedFrequency string
 
 const (
-	ExchangeJobSchedule ExchangeName = "timely-schedule-job"
-	ExchangeJobStatus   ExchangeName = "timely-job-status"
-	QueueJobStatus      QueueName    = "timely-job-status"
-	RoutingKeyJobStatus RoutingKey   = "timely-job-status"
+	JobScheduleExchange ExchangeName = "timely-schedule-job"
+	JobStatusExchange   ExchangeName = "timely-job-status"
+	JobStatusQueue      QueueName    = "timely-job-status"
+	JobStatusRoutingKey RoutingKey   = "timely-job-status"
 )
 
 const Once PredefinedFrequency = "once"

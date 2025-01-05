@@ -188,14 +188,18 @@ func (s *Scheduler) handleHttp(ctx context.Context, schedule *Schedule, jobRun *
 	return nil
 }
 
-// TODO: this probably should be external dependency that signals scheduler about event
 func (s *Scheduler) handleRabbitMq(ctx context.Context, schedule *Schedule, jobRun *JobRun) error {
-	err := s.AsyncTransport.BindQueue(schedule.Job.Slug, string(ExchangeJobSchedule), schedule.Job.Slug)
+	err := s.AsyncTransport.CreateQueue(schedule.Job.Slug)
 	if err != nil {
 		return err
 	}
 
-	err = s.AsyncTransport.Publish(ctx, string(ExchangeJobSchedule), schedule.Job.Slug,
+	err = s.AsyncTransport.BindQueue(schedule.Job.Slug, string(JobScheduleExchange), schedule.Job.Slug)
+	if err != nil {
+		return err
+	}
+
+	err = s.AsyncTransport.Publish(ctx, string(JobScheduleExchange), schedule.Job.Slug,
 		ScheduleJobEvent{
 			ScheduleId: schedule.Id,
 			GroupId:    jobRun.GroupId,
@@ -210,8 +214,9 @@ func (s *Scheduler) handleRabbitMq(ctx context.Context, schedule *Schedule, jobR
 	return nil
 }
 
+// TODO: this probably should be external dependency that signals scheduler about event
 func (s *Scheduler) processJobEvents(ctx context.Context) {
-	err := s.AsyncTransport.Subscribe(ctx, string(QueueJobStatus), func(message []byte) error {
+	err := s.AsyncTransport.Subscribe(ctx, string(JobStatusQueue), func(message []byte) error {
 		err := HandleJobEvent(ctx, message, s.Storage, s.logger)
 		if err != nil {
 			s.logger.Errorf("error during job event processing - %v", err)
