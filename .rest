@@ -62,6 +62,7 @@ Content-Type: application/json
 {
     "description": "test job description",
     "frequency": "once",
+    "scheduleStart": "2025-11-25T00:00:00+01:00",
     "job": {
         "slug": "process-user-notifications",
         "data": {
@@ -74,4 +75,4 @@ Content-Type: application/json
 }
 
 ### Delete schedule
-DELETE {{baseAddress}}/api/v1/schedules/2c1c5400-1ae8-4cc5-aa31-6ea15bbc504e
+DELETE {{baseAddress}}/api/v1/schedules/{{scheduleId}}

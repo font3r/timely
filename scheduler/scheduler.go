@@ -301,12 +301,10 @@ func (s *Scheduler) HandleJobStatusEvent(ctx context.Context, message []byte) er
 func (s *Scheduler) onScheduleFinish(schedule *Schedule) {
 	if schedule.Frequency == string(Once) &&
 		schedule.Configuration.TransportType == Rabbitmq {
-		purged, err := s.AsyncTransport.DeleteQueue(schedule.Job.Slug)
+		err := s.AsyncTransport.DeleteQueue(schedule.Job.Slug)
 		if err != nil {
 			s.logger.Errorf("error during deleting queue - %s", err)
 			return
 		}
-
-		s.logger.Infof("deleted %d queues", purged)
 	}
 }

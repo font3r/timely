@@ -179,7 +179,11 @@ func deleteSchedule(v1 *mux.Router, app Application) {
 			return
 		}
 
-		h := commands.DeleteScheduleHandler{Storage: app.Scheduler.Storage}
+		h := commands.DeleteScheduleHandler{
+			AsyncTransport: app.Scheduler.AsyncTransport,
+			Storage:        app.Scheduler.Storage,
+			Logger:         app.Logger,
+		}
 		err = h.Handle(req.Context(), commands.DeleteSchedule{Id: id})
 
 		if err != nil {
