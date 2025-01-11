@@ -8,13 +8,14 @@ GET {{baseAddress}}/api/v1/schedules/{{scheduleId}}
 # @name schedules
 GET {{baseAddress}}/api/v1/schedules?page=1&pageSize=3
 
-### Create schedule 'cyclic' frequency, start at specific date
+### Create http schedule 'cyclic' frequency, start at specific date
 # @name schedule
 POST {{baseAddress}}/api/v1/schedules
 Content-Type: application/json
 
 {
     "description": "process user notifications",
+    "scheduleStart": "2025-11-25T00:00:00+01:00",
     "frequency": "*/10 * * * * *",
     "job": {
         "slug": "process-user-notifications",
@@ -28,14 +29,13 @@ Content-Type: application/json
     }
 }
 
-### Create schedule with 'once' frequency, starts instantly
+### Create http schedule with 'once' frequency, starts instantly
 # @name schedule
 POST {{baseAddress}}/api/v1/schedules
 Content-Type: application/json
 
 {
     "description": "test job description",
-    "scheduleStart": "2025-11-25T00:00:00+01:00",
     "frequency": "once",
     "job": {
         "slug": "process-user-notifications",
@@ -51,6 +51,25 @@ Content-Type: application/json
     "configuration": {
         "transportType": "http",
         "url": "http://localhost:5001/api/v1/jobs/process-user-notifications"
+    }
+}
+
+### Create async schedule with 'once' frequency, starts instantly
+# @name schedule
+POST {{baseAddress}}/api/v1/schedules
+Content-Type: application/json
+
+{
+    "description": "test job description",
+    "frequency": "once",
+    "job": {
+        "slug": "process-user-notifications",
+        "data": {
+            "userId": "545753464587546"
+        }
+    },
+    "configuration": {
+        "transportType": "rabbitmq"
     }
 }
 
