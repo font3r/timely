@@ -199,7 +199,7 @@ func processJobEvent(v1 *mux.Router, app Application) {
 			return
 		}
 
-		err = scheduler.HandleJobStatusEvent(req.Context(), payload, app.Scheduler.Storage, app.Logger)
+		err = app.Scheduler.HandleJobStatusEvent(req.Context(), payload)
 		if err != nil {
 			w.WriteHeader(http.StatusBadRequest)
 			return

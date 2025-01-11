@@ -22,7 +22,7 @@ type AsyncTransportDriver interface {
 	Publish(ctx context.Context, exchange, routingKey string, message any) error
 	Subscribe(ctx context.Context, queue string, handle func(message []byte) error) error
 	CreateQueue(queue string) error
-	DeleteQueue(queue string) error
+	DeleteQueue(queue string) (int, error)
 	CreateExchange(exchange string) error
 	BindQueue(queue, exchange, routingKey string) error
 }
@@ -307,16 +307,16 @@ func (t *RabbitMqTransport) BindQueue(queue, exchange, routingKey string) error 
 	return nil
 }
 
-func (t *RabbitMqTransport) DeleteQueue(queue string) error {
+func (t *RabbitMqTransport) DeleteQueue(queue string) (int, error) {
 	channel, err := t.getChannel(TimelyAdminChannel)
 	if err != nil {
-		return err
+		return 0, err
 	}
 
-	_, err = channel.QueueDelete(queue, true, true, false)
+	purge, err := channel.QueueDelete(queue, true, true, false)
 	if err != nil {
-		return err
+		return purge, err
 	}
 
-	return nil
+	return purge, nil
 }

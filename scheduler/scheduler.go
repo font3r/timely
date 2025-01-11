@@ -69,7 +69,7 @@ func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTrans
 	logger.Infof("starting scheduler with id %s", scheduler.Id)
 
 	if slices.Contains(Supports, "rabbitmq") {
-		go scheduler.processJobStatusEvents(ctx)
+		go scheduler.listenForJobStatusEvents(ctx)
 	}
 
 	go scheduler.staleJobSearch(ctx)
@@ -214,11 +214,10 @@ func (s *Scheduler) handleRabbitMq(ctx context.Context, schedule *Schedule, jobR
 	return nil
 }
 
-// TODO: this probably should be external dependency that signals scheduler about event
-func (s *Scheduler) processJobStatusEvents(ctx context.Context) {
+func (s *Scheduler) listenForJobStatusEvents(ctx context.Context) {
 	for {
 		err := s.AsyncTransport.Subscribe(ctx, string(JobStatusQueue), func(message []byte) error {
-			err := HandleJobStatusEvent(ctx, message, s.Storage, s.logger)
+			err := s.HandleJobStatusEvent(ctx, message)
 			if err != nil {
 				s.logger.Errorf("error during job status event processing - %v", err)
 				return err
@@ -236,17 +235,17 @@ func (s *Scheduler) processJobStatusEvents(ctx context.Context) {
 	}
 }
 
-func HandleJobStatusEvent(ctx context.Context, message []byte, storage StorageDriver, logger *zap.SugaredLogger) error {
+func (s *Scheduler) HandleJobStatusEvent(ctx context.Context, message []byte) error {
 	jobStatus := JobStatusEvent{}
 	err := json.Unmarshal(message, &jobStatus)
 	if err != nil {
-		logger.Infof("received invalid job event  %+v", err)
+		s.logger.Infof("received invalid job event  %+v", err)
 		return err
 	}
 
-	logger.Infof("received status %+v", jobStatus)
+	s.logger.Infof("received status %+v", jobStatus)
 
-	schedule, err := storage.GetScheduleById(ctx, jobStatus.ScheduleId)
+	schedule, err := s.Storage.GetScheduleById(ctx, jobStatus.ScheduleId)
 	if err != nil {
 		return err
 	}
@@ -255,7 +254,7 @@ func HandleJobStatusEvent(ctx context.Context, message []byte, storage StorageDr
 		return ErrReceivedStatusForUnknownSchedule
 	}
 
-	groupRuns, err := storage.GetJobRunGroup(ctx, jobStatus.ScheduleId, jobStatus.GroupId)
+	groupRuns, err := s.Storage.GetJobRunGroup(ctx, jobStatus.ScheduleId, jobStatus.GroupId)
 	if err != nil {
 		return err
 	}
@@ -282,18 +281,32 @@ func HandleJobStatusEvent(ctx context.Context, message []byte, storage StorageDr
 		{
 			jobRun.Succeed(time.Now)
 			schedule.Succeed(time.Now)
+			s.onScheduleFinish(schedule)
 		}
 	}
 
-	err = storage.UpdateJobRun(ctx, *jobRun)
+	err = s.Storage.UpdateJobRun(ctx, *jobRun)
 	if err != nil {
 		return err
 	}
 
-	err = storage.UpdateSchedule(ctx, *schedule)
+	err = s.Storage.UpdateSchedule(ctx, *schedule)
 	if err != nil {
 		return err
 	}
 
 	return nil
+}
+
+func (s *Scheduler) onScheduleFinish(schedule *Schedule) {
+	if schedule.Frequency == string(Once) &&
+		schedule.Configuration.TransportType == Rabbitmq {
+		purged, err := s.AsyncTransport.DeleteQueue(schedule.Job.Slug)
+		if err != nil {
+			s.logger.Errorf("error during deleting queue - %s", err)
+			return
+		}
+
+		s.logger.Infof("deleted %d queues", purged)
+	}
 }
