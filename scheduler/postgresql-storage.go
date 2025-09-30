@@ -23,7 +23,6 @@ type StorageDriver interface {
 	GetJobRunGroup(ctx context.Context, scheduleId uuid.UUID, groupId uuid.UUID) ([]*JobRun, error)
 	GetJobRuns(ctx context.Context, scheduleId uuid.UUID) ([]*JobRun, error)
 	GetRecentJobRuns(ctx context.Context, scheduleId uuid.UUID) ([]*JobRun, error)
-	GetStaleJobs(ctx context.Context) ([]StaleJobRun, error)
 	UpdateJobRun(ctx context.Context, jobRun JobRun) error
 }
 
@@ -358,32 +357,6 @@ func (pg Pgsql) GetRecentJobRuns(ctx context.Context, scheduleId uuid.UUID) ([]*
 		jobRuns = append(jobRuns, &jobRun)
 	}
 	return jobRuns, nil
-}
-
-func (pg Pgsql) GetStaleJobs(ctx context.Context) ([]StaleJobRun, error) {
-	staleJobTime := time.Minute * 5
-	sql := `SELECT s.id, jr.id, s.last_execution_date, jr.start_date FROM schedules AS s
-		JOIN job_runs AS jr ON s.id = jr.schedule_id
-		WHERE s.status = $1 AND jr.status = $2 AND jr.start_date <= $3`
-
-	rows, err := pg.pool.Query(ctx, sql, Scheduled, JobWaiting, time.Now().Add(staleJobTime))
-	if err != nil {
-		return nil, err
-	}
-
-	staleJobRuns := make([]StaleJobRun, 0)
-	for rows.Next() {
-		var jobRun StaleJobRun
-		err = rows.Scan(&jobRun.ScheduleId, &jobRun.JobRunId, &jobRun.LastExecutionDate,
-			&jobRun.JobStartDate)
-		if err != nil {
-			return nil, err
-		}
-
-		staleJobRuns = append(staleJobRuns, jobRun)
-	}
-
-	return staleJobRuns, nil
 }
 
 func (pg Pgsql) UpdateJobRun(ctx context.Context, jobRun JobRun) error {

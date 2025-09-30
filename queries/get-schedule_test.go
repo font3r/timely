@@ -146,10 +146,6 @@ func (s storageDriverFake) GetJobRuns(ctx context.Context, scheduleId uuid.UUID)
 	panic("implement me")
 }
 
-func (s storageDriverFake) GetStaleJobs(ctx context.Context) ([]scheduler.StaleJobRun, error) {
-	panic("implement me")
-}
-
 func (s storageDriverFake) GetRecentJobRuns(ctx context.Context, scheduleId uuid.UUID) ([]*scheduler.JobRun, error) {
 	v, exists := s.jobRuns[scheduleId.String()]
 	if !exists {

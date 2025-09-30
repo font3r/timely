@@ -45,7 +45,6 @@ var (
 )
 
 const schedulerTickDelay = time.Second
-const getStaleJobsDelay = time.Second * 5
 const MAX_SCHEDULES_CONCURRENCY = 2
 
 func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTransportDriver,
@@ -61,8 +60,6 @@ func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTrans
 	logger.Infof("starting scheduler with id %s", scheduler.Id)
 
 	go scheduler.listenForJobStatusEvents(ctx)
-	// TODO: how to detect stale jobs
-	// go scheduler.staleJobSearch(ctx)
 
 	go func() {
 		for {
@@ -76,25 +73,6 @@ func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTrans
 	}()
 
 	return &scheduler
-}
-
-func (s *Scheduler) staleJobSearch(ctx context.Context) {
-	s.logger.Info("starting stale jobs searching")
-
-	// TODO: how should we handle stale jobs
-	for {
-		staleJobs, err := s.Storage.GetStaleJobs(ctx)
-		if err != nil {
-			s.logger.Error("error during getting stale jobs %v", err)
-			continue
-		}
-
-		if len(staleJobs) > 0 {
-			s.logger.Warnf("found %d stale schedules", len(staleJobs))
-		}
-
-		time.Sleep(getStaleJobsDelay)
-	}
 }
 
 func (s *Scheduler) processTick(ctx context.Context) error {
@@ -137,8 +115,7 @@ func (s *Scheduler) processSchedule(ctx context.Context, schedule *Schedule, sem
 		s.logger.Infof("scheduled job %s/%s, run %s", schedule.Job.Id, schedule.Job.Slug, jobRun.Id)
 	}
 
-	// TODO: starting schedule should be transactional so outbox is most likely needed for async transport
-	// Job run has to be created before starting job because we can hit race condition with job statuses
+	// TODO: starting schedule should be transactional so we have to keep waiting status if rabbit is not responding
 	err := s.Storage.AddJobRun(ctx, jobRun)
 	if err != nil {
 		s.logger.Errorf("error adding job run - %v", err)

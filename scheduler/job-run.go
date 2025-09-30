@@ -29,13 +29,6 @@ type JobRun struct {
 	EndDate    *time.Time
 }
 
-type StaleJobRun struct {
-	ScheduleId        uuid.UUID
-	JobRunId          uuid.UUID
-	LastExecutionDate *time.Time
-	JobStartDate      time.Time
-}
-
 func NewJobRun(scheduleId uuid.UUID, groupId uuid.UUID, now func() time.Time) JobRun {
 	return JobRun{
 		Id:         uuid.New(),
