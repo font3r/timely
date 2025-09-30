@@ -61,7 +61,8 @@ func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTrans
 	logger.Infof("starting scheduler with id %s", scheduler.Id)
 
 	go scheduler.listenForJobStatusEvents(ctx)
-	go scheduler.staleJobSearch(ctx)
+	// TODO: how to detect stale jobs
+	// go scheduler.staleJobSearch(ctx)
 
 	go func() {
 		for {

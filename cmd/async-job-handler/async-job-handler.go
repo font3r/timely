@@ -6,8 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"strconv"
-	"strings"
 	"time"
 	"timely/libs"
 	"timely/scheduler"
@@ -41,36 +39,34 @@ func StartRabbitMq(ctx context.Context, logger *zap.SugaredLogger) {
 		panic(fmt.Sprintf("test-app: create transport error - %s", err))
 	}
 
-	for _, jobSlug := range generateJobNames(jobsAmount) {
-		go func(jobSlug string) {
-			err = tra.Subscribe(ctx, jobSlug, func(message []byte) error {
-				logger.Infof("requested job start with slug %s", jobSlug)
+	go func(jobSlug string) {
+		err = tra.Subscribe(ctx, jobSlug, func(message []byte) error {
+			logger.Infof("requested job start with slug %s", jobSlug)
 
-				var event libs.ScheduleJobEvent
-				err = json.Unmarshal(message, &event)
-				if err != nil {
-					return err
-				}
-
-				err = processAsyncJob(ctx, tra, event, logger)
-				if err != nil {
-					logger.Errorf("error during job processing - %s", err)
-				}
-
-				return nil
-			})
-
+			var event libs.ScheduleJobEvent
+			err = json.Unmarshal(message, &event)
 			if err != nil {
-				logger.Errorf("error during subscribe for job %s - %s", jobSlug, err)
-				panic(err)
+				return err
 			}
-		}(jobSlug)
 
-		logger.Infof("test app listening for %s", jobSlug)
-	}
+			err = processFakeJob(ctx, tra, event, logger)
+			if err != nil {
+				logger.Errorf("error during job processing - %s", err)
+			}
+
+			return nil
+		})
+
+		if err != nil {
+			logger.Errorf("error during subscribe for job %s - %s", jobSlug, err)
+			panic(err)
+		}
+	}("process-user-notifications")
+
+	logger.Infof("test app listening for 'process-user-notifications'")
 }
 
-func processAsyncJob(ctx context.Context, tra *scheduler.RabbitMqTransport, event libs.ScheduleJobEvent,
+func processFakeJob(ctx context.Context, tra *scheduler.RabbitMqTransport, event libs.ScheduleJobEvent,
 	logger *zap.SugaredLogger) error {
 	for i := 0; i < 5; i++ {
 		if jitterFail() {
@@ -113,19 +109,8 @@ func processAsyncJob(ctx context.Context, tra *scheduler.RabbitMqTransport, even
 	return nil
 }
 
-func generateJobNames(n int) []string {
-	jobName := "test-stress-async-job-%i"
-	jobs := make([]string, 0, n)
-
-	for i := 0; i < n; i++ {
-		jobs = append(jobs, strings.Replace(jobName, "%i", strconv.Itoa(i), 1))
-	}
-
-	return jobs
-}
-
 func jitterFail() bool {
-	failPercentage := 15
+	failPercentage := 0
 
 	return rand.Intn(100) <= failPercentage-1
 }
