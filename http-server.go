@@ -3,9 +3,7 @@ package main
 import (
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
-	"net/url"
 	"strconv"
 	"time"
 	"timely/commands"
@@ -23,8 +21,6 @@ func registerApiRoutes(router *mux.Router, app Application) {
 	getSchedule(v1, app)
 	getSchedules(v1, app)
 	deleteSchedule(v1, app)
-
-	processJobEvent(v1, app)
 }
 
 func createSchedule(v1 *mux.Router, app Application) {
@@ -85,26 +81,6 @@ func validateCreateSchedule(req *http.Request) (commands.CreateScheduleCommand, 
 
 	if comm.Job.Slug == "" {
 		err = errors.Join(err, errors.New("invalid job slug"))
-	}
-
-	if comm.Configuration == (commands.ScheduleConfiguration{}) {
-		err = errors.Join(err, errors.New("missing schedule configuration"))
-	}
-
-	if comm.Configuration.TransportType != scheduler.Http &&
-		comm.Configuration.TransportType != scheduler.Rabbitmq {
-		err = errors.Join(err, errors.New("invalid transport type"))
-	}
-
-	if comm.Configuration.TransportType == scheduler.Http {
-		if comm.Configuration.Url == "" {
-			err = errors.Join(err, errors.New("missing url for http transport"))
-		} else {
-			_, urlErr := url.ParseRequestURI(comm.Configuration.Url)
-			if urlErr != nil {
-				err = errors.Join(err, errors.New("invalid url for http transport"))
-			}
-		}
 	}
 
 	if err != nil {
@@ -193,24 +169,6 @@ func deleteSchedule(v1 *mux.Router, app Application) {
 
 		noContent(w)
 	}).Methods("DELETE")
-}
-
-func processJobEvent(v1 *mux.Router, app Application) {
-	v1.HandleFunc("/schedules/status", func(w http.ResponseWriter, req *http.Request) {
-		payload, err := io.ReadAll(req.Body)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		err = app.Scheduler.HandleJobStatusEvent(req.Context(), payload)
-		if err != nil {
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		w.WriteHeader(http.StatusAccepted)
-	})
 }
 
 func ok(w http.ResponseWriter, data any) {

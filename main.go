@@ -78,35 +78,31 @@ func buildDependencies(ctx context.Context, logger *zap.SugaredLogger) Applicati
 		pgStorage = pg
 	}
 
+	if !viper.IsSet("transport.rabbitmq") {
+		logger.Panicf("invalid rabbitmq configuration, missing transport.rabbitmq")
+	}
+
+	if !viper.IsSet("transport.rabbitmq.connectionString") {
+		logger.Panicf("invalid rabbitmq configuration, missing transport.rabbitmq.connectionString")
+	}
+
 	var rabbitMqTransport *scheduler.RabbitMqTransport
-	if viper.IsSet("transport.rabbitmq") && viper.GetBool("transport.rabbitmq.enabled") {
-		rabbitMq, err := scheduler.NewRabbitMqTransport(
-			viper.GetString("transport.rabbitmq.connectionString"), logger)
-		if err != nil {
-			logger.Panicf(fmt.Sprintf("create transport error %s", err))
-		}
-
-		err = createTransportDependencies(rabbitMq)
-		if err != nil {
-			logger.Panicf(fmt.Sprintf("creating internal exchanges/queues error - %v", err))
-		}
-
-		rabbitMqTransport = rabbitMq
-		supported = append(supported, "rabbitmq")
+	rabbitMq, err := scheduler.NewRabbitMqTransport(
+		viper.GetString("transport.rabbitmq.connectionString"), logger)
+	if err != nil {
+		logger.Panicf(fmt.Sprintf("create transport error %s", err))
 	}
 
-	var httpTransport scheduler.HttpTransport
-	if viper.IsSet("transport.http") && viper.GetBool("transport.http.enabled") {
-		httpTransport = scheduler.HttpTransport{
-			Logger: logger,
-		}
-		supported = append(supported, "http")
+	err = createTransportDependencies(rabbitMq)
+	if err != nil {
+		logger.Panicf(fmt.Sprintf("creating internal exchanges/queues error - %v", err))
 	}
+
+	rabbitMqTransport = rabbitMq
 
 	return Application{
-		Scheduler: scheduler.Start(ctx, pgStorage, rabbitMqTransport, httpTransport,
-			supported, logger),
-		Logger: logger,
+		Scheduler: scheduler.Start(ctx, pgStorage, rabbitMqTransport, logger),
+		Logger:    logger,
 	}
 }
 

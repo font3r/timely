@@ -16,15 +16,6 @@ func WithScheduleStart(time *time.Time) ScheduleOption {
 	}
 }
 
-func WithConfiguration(transportType TransportType, url string) ScheduleOption {
-	return func(s *Schedule) {
-		s.Configuration = ScheduleConfiguration{
-			TransportType: transportType,
-			Url:           url,
-		}
-	}
-}
-
 func WithJob(slug string, data *map[string]any) ScheduleOption {
 	return func(s *Schedule) {
 		s.Job = NewJob(slug, data)

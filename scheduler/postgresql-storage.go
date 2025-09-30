@@ -48,7 +48,7 @@ func (pg Pgsql) GetScheduleById(ctx context.Context, id uuid.UUID) (*Schedule, e
 
 	sql := `SELECT s.id, s.group_id, s.description, s.status, s.frequency, s.schedule_start, 
 				s.retry_policy_strategy, s.retry_policy_count, s.retry_policy_interval, 
-				s.transport_type, s.url, s.last_execution_date, s.next_execution_date, j.id, 
+				s.last_execution_date, s.next_execution_date, j.id, 
 				j.slug, j.data
 			FROM jobs AS j 
 			JOIN schedules AS s ON s.id = j.schedule_id
@@ -59,8 +59,8 @@ func (pg Pgsql) GetScheduleById(ctx context.Context, id uuid.UUID) (*Schedule, e
 	err := pg.pool.QueryRow(ctx, sql, id).
 		Scan(&schedule.Id, &schedule.GroupId, &schedule.Description, &schedule.Status, &schedule.Frequency,
 			&schedule.ScheduleStart, &schedule.RetryPolicy.Strategy, &schedule.RetryPolicy.Count,
-			&schedule.RetryPolicy.Interval, &schedule.Configuration.TransportType, &schedule.Configuration.Url,
-			&schedule.LastExecutionDate, &schedule.NextExecutionDate, &schedule.Job.Id, &schedule.Job.Slug, &jobData)
+			&schedule.RetryPolicy.Interval, &schedule.LastExecutionDate, &schedule.NextExecutionDate,
+			&schedule.Job.Id, &schedule.Job.Slug, &jobData)
 
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -80,8 +80,8 @@ func (pg Pgsql) GetScheduleById(ctx context.Context, id uuid.UUID) (*Schedule, e
 
 func (pg Pgsql) GetAwaitingSchedules(ctx context.Context) ([]*Schedule, error) {
 	sql := `SELECT s.id, s.group_id, s.description, s.status, s.frequency, s.schedule_start,
-				s.retry_policy_strategy, s.retry_policy_count, s.retry_policy_interval, s.transport_type, 
-				s.url, s.last_execution_date, s.next_execution_date, j.id, j.slug, j.data
+				s.retry_policy_strategy, s.retry_policy_count, s.retry_policy_interval, 
+				s.last_execution_date, s.next_execution_date, j.id, j.slug, j.data
 			FROM jobs AS j 
 			JOIN schedules AS s ON s.id = j.schedule_id
 			WHERE status IN ($1) AND next_execution_date <= $2
@@ -102,9 +102,8 @@ func (pg Pgsql) GetAwaitingSchedules(ctx context.Context) ([]*Schedule, error) {
 		}
 		err = rows.Scan(&schedule.Id, &schedule.GroupId, &schedule.Description, &schedule.Status,
 			&schedule.Frequency, &schedule.ScheduleStart, &schedule.RetryPolicy.Strategy,
-			&schedule.RetryPolicy.Count, &schedule.RetryPolicy.Interval, &schedule.Configuration.TransportType,
-			&schedule.Configuration.Url, &schedule.LastExecutionDate, &schedule.NextExecutionDate,
-			&schedule.Job.Id, &schedule.Job.Slug, &jobData)
+			&schedule.RetryPolicy.Count, &schedule.RetryPolicy.Interval, &schedule.LastExecutionDate,
+			&schedule.NextExecutionDate, &schedule.Job.Id, &schedule.Job.Slug, &jobData)
 
 		if err != nil {
 			return nil, err
@@ -123,8 +122,8 @@ func (pg Pgsql) GetAwaitingSchedules(ctx context.Context) ([]*Schedule, error) {
 
 func (pg Pgsql) GetSchedulesPaged(ctx context.Context, page int, pageSize int) ([]*Schedule, error) {
 	sql := `SELECT s.id, s.group_id, s.description, s.status, s.frequency, s.schedule_start, 
-				s.retry_policy_strategy, s.retry_policy_count, s.retry_policy_interval, s.transport_type, 
-				s.url, s.last_execution_date, s.next_execution_date, j.id, j.slug, j.data
+				s.retry_policy_strategy, s.retry_policy_count, s.retry_policy_interval, 
+				s.last_execution_date, s.next_execution_date, j.id, j.slug, j.data
 			FROM jobs AS j 
 			JOIN schedules AS s ON s.id = j.schedule_id
 			ORDER BY last_execution_date DESC
@@ -148,9 +147,8 @@ func (pg Pgsql) GetSchedulesPaged(ctx context.Context, page int, pageSize int) (
 
 		err = rows.Scan(&schedule.Id, &schedule.GroupId, &schedule.Description, &schedule.Status,
 			&schedule.Frequency, &schedule.ScheduleStart, &schedule.RetryPolicy.Strategy,
-			&schedule.RetryPolicy.Count, &schedule.RetryPolicy.Interval, &schedule.Configuration.TransportType,
-			&schedule.Configuration.Url, &schedule.LastExecutionDate, &schedule.NextExecutionDate,
-			&schedule.Job.Id, &schedule.Job.Slug, &jobData)
+			&schedule.RetryPolicy.Count, &schedule.RetryPolicy.Interval, &schedule.LastExecutionDate,
+			&schedule.NextExecutionDate, &schedule.Job.Id, &schedule.Job.Slug, &jobData)
 
 		if err != nil {
 			return nil, err
@@ -174,11 +172,10 @@ func (pg Pgsql) Add(ctx context.Context, schedule Schedule) error {
 	}
 
 	_, err = tx.Exec(ctx,
-		"INSERT INTO schedules VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
+		"INSERT INTO schedules VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
 		schedule.Id, schedule.GroupId, schedule.Description, schedule.Status, schedule.Frequency,
 		schedule.ScheduleStart, schedule.RetryPolicy.Strategy, schedule.RetryPolicy.Count,
-		schedule.RetryPolicy.Interval, schedule.Configuration.TransportType, schedule.Configuration.Url,
-		schedule.LastExecutionDate, schedule.NextExecutionDate)
+		schedule.RetryPolicy.Interval, schedule.LastExecutionDate, schedule.NextExecutionDate)
 
 	if err != nil {
 		if txErr := tx.Rollback(ctx); txErr != nil {

@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"slices"
 	"time"
 
 	"github.com/google/uuid"
@@ -16,7 +14,6 @@ type Scheduler struct {
 	Id             uuid.UUID
 	Storage        StorageDriver
 	AsyncTransport AsyncTransportDriver
-	SyncTransport  SyncTransportDriver
 	logger         *zap.SugaredLogger
 }
 
@@ -51,27 +48,19 @@ const schedulerTickDelay = time.Second
 const getStaleJobsDelay = time.Second * 5
 const MAX_SCHEDULES_CONCURRENCY = 2
 
-var Supports []string
-
 func Start(ctx context.Context, storage StorageDriver, asyncTransport AsyncTransportDriver,
-	syncTransport SyncTransportDriver, supports []string, logger *zap.SugaredLogger) *Scheduler {
+	logger *zap.SugaredLogger) *Scheduler {
 
 	scheduler := Scheduler{
 		Id:             uuid.New(),
 		Storage:        storage,
 		AsyncTransport: asyncTransport,
-		SyncTransport:  syncTransport,
 		logger:         logger,
 	}
 
-	Supports = supports
-
 	logger.Infof("starting scheduler with id %s", scheduler.Id)
 
-	if slices.Contains(Supports, "rabbitmq") {
-		go scheduler.listenForJobStatusEvents(ctx)
-	}
-
+	go scheduler.listenForJobStatusEvents(ctx)
 	go scheduler.staleJobSearch(ctx)
 
 	go func() {
@@ -128,16 +117,7 @@ func (s *Scheduler) processSchedule(ctx context.Context, schedule *Schedule, sem
 	schedule.Start(time.Now)
 	jobRun := NewJobRun(schedule.Id, schedule.GroupId, time.Now)
 
-	var schueduleStartErr error
-	switch schedule.Configuration.TransportType {
-	case Http:
-		schueduleStartErr = s.handleHttp(ctx, schedule, &jobRun)
-	case Rabbitmq:
-		schueduleStartErr = s.handleRabbitMq(ctx, schedule, &jobRun)
-	default:
-		schueduleStartErr = fmt.Errorf("unsupported transport type - %s",
-			schedule.Configuration.TransportType)
-	}
+	schueduleStartErr := s.handleSchedule(ctx, schedule, &jobRun)
 
 	if schueduleStartErr != nil {
 		s.logger.Errorf("failed to start job for schedule %s - %v", schedule.Id, schueduleStartErr)
@@ -171,24 +151,7 @@ func (s *Scheduler) processSchedule(ctx context.Context, schedule *Schedule, sem
 	}
 }
 
-func (s *Scheduler) handleHttp(ctx context.Context, schedule *Schedule, jobRun *JobRun) error {
-	err := s.SyncTransport.Start(ctx, schedule.Configuration.Url,
-		ScheduleJobRequest{
-			ScheduleId: schedule.Id,
-			GroupId:    jobRun.GroupId,
-			JobRunId:   jobRun.Id,
-			Job:        schedule.Job.Slug,
-			Data:       schedule.Job.Data,
-		})
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (s *Scheduler) handleRabbitMq(ctx context.Context, schedule *Schedule, jobRun *JobRun) error {
+func (s *Scheduler) handleSchedule(ctx context.Context, schedule *Schedule, jobRun *JobRun) error {
 	err := s.AsyncTransport.CreateQueue(schedule.Job.Slug)
 	if err != nil {
 		return err
@@ -217,7 +180,7 @@ func (s *Scheduler) handleRabbitMq(ctx context.Context, schedule *Schedule, jobR
 func (s *Scheduler) listenForJobStatusEvents(ctx context.Context) {
 	for {
 		err := s.AsyncTransport.Subscribe(ctx, string(JobStatusQueue), func(message []byte) error {
-			err := s.HandleJobStatusEvent(ctx, message)
+			err := s.handleJobStatusEvent(ctx, message)
 			if err != nil {
 				s.logger.Errorf("error during job status event processing - %v", err)
 				return err
@@ -235,7 +198,7 @@ func (s *Scheduler) listenForJobStatusEvents(ctx context.Context) {
 	}
 }
 
-func (s *Scheduler) HandleJobStatusEvent(ctx context.Context, message []byte) error {
+func (s *Scheduler) handleJobStatusEvent(ctx context.Context, message []byte) error {
 	jobStatus := JobStatusEvent{}
 	err := json.Unmarshal(message, &jobStatus)
 	if err != nil {
@@ -299,8 +262,7 @@ func (s *Scheduler) HandleJobStatusEvent(ctx context.Context, message []byte) er
 }
 
 func (s *Scheduler) onScheduleFinish(schedule *Schedule) {
-	if schedule.Frequency == string(Once) &&
-		schedule.Configuration.TransportType == Rabbitmq {
+	if schedule.Frequency == string(Once) {
 		err := s.AsyncTransport.DeleteQueue(schedule.Job.Slug)
 		if err != nil {
 			s.logger.Errorf("error during deleting queue - %s", err)

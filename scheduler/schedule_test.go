@@ -18,10 +18,6 @@ func TestNewSchedule(t *testing.T) {
 			Interval: "2s",
 			Count:    5,
 		},
-		Configuration: ScheduleConfiguration{
-			TransportType: "http",
-			Url:           "http://example.com",
-		},
 		LastExecutionDate: nil,
 		NextExecutionDate: &net,
 		Job: &Job{
@@ -33,7 +29,6 @@ func TestNewSchedule(t *testing.T) {
 	rp, _ := NewRetryPolicy(Constant, 5, "2s")
 	s := NewSchedule("description", "once", getStubDate,
 		WithRetryPolicy(rp),
-		WithConfiguration("http", "http://example.com"),
 		WithJob("slug", nil))
 
 	expected.Id = s.Id

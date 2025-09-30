@@ -44,12 +44,10 @@ func (h DeleteScheduleHandler) Handle(ctx context.Context, c DeleteSchedule) err
 		return err
 	}
 
-	if sch.Configuration.TransportType == scheduler.Rabbitmq {
-		err := h.AsyncTransport.DeleteQueue(sch.Job.Slug)
-		if err != nil {
-			h.Logger.Errorf("error during deleting queue - %s", err)
-			return ErrTransportError
-		}
+	err = h.AsyncTransport.DeleteQueue(sch.Job.Slug)
+	if err != nil {
+		h.Logger.Errorf("error during deleting queue - %s", err)
+		return ErrTransportError
 	}
 
 	return nil

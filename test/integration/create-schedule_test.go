@@ -42,7 +42,6 @@ func TestCreateSchedule(t *testing.T) {
 	newSchedule := scheduler.NewSchedule("test-description", "*/10 * * * * *", getStubDate,
 		scheduler.WithJob("test-slug", nil),
 		scheduler.WithRetryPolicy(rp),
-		scheduler.WithConfiguration("http", "http://example.com"),
 		scheduler.WithScheduleStart(&date))
 
 	err = pgStorage.Add(ctx, newSchedule)

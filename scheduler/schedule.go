@@ -27,22 +27,9 @@ type Schedule struct {
 	ScheduleStart     *time.Time
 	Status            ScheduleStatus
 	RetryPolicy       RetryPolicy
-	Configuration     ScheduleConfiguration
 	LastExecutionDate *time.Time
 	NextExecutionDate *time.Time
 	Job               *Job
-}
-
-type TransportType string
-
-const (
-	Http     TransportType = "http"
-	Rabbitmq TransportType = "rabbitmq"
-)
-
-type ScheduleConfiguration struct {
-	TransportType TransportType
-	Url           string
 }
 
 func NewSchedule(description, frequency string, time func() time.Time, opts ...ScheduleOption) Schedule {

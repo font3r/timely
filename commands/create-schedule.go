@@ -2,7 +2,6 @@ package commands
 
 import (
 	"context"
-	"slices"
 	"time"
 	"timely/scheduler"
 
@@ -16,7 +15,6 @@ type CreateScheduleCommand struct {
 	Job           JobConfiguration         `json:"job"`
 	RetryPolicy   RetryPolicyConfiguration `json:"retryPolicy"`
 	ScheduleStart *time.Time               `json:"scheduleStart"`
-	Configuration ScheduleConfiguration    `json:"configuration"`
 }
 
 type JobConfiguration struct {
@@ -28,11 +26,6 @@ type RetryPolicyConfiguration struct {
 	Strategy scheduler.StrategyType `json:"strategy"`
 	Count    int                    `json:"count"`
 	Interval string                 `json:"interval"`
-}
-
-type ScheduleConfiguration struct {
-	TransportType scheduler.TransportType `json:"transportType"`
-	Url           string                  `json:"url"`
 }
 
 type CreateScheduleHandler struct {
@@ -50,10 +43,6 @@ var ErrUnsupportedTransportType = scheduler.Error{
 	Msg:  "unsupported transport type"}
 
 func (h CreateScheduleHandler) Handle(ctx context.Context, c CreateScheduleCommand) (*CreateScheduleResponse, error) {
-	if !slices.Contains(scheduler.Supports, string(c.Configuration.TransportType)) {
-		return nil, ErrUnsupportedTransportType
-	}
-
 	retryPolicy, err := getRetryPolicy(c.RetryPolicy)
 	if err != nil {
 		return nil, err
@@ -62,8 +51,7 @@ func (h CreateScheduleHandler) Handle(ctx context.Context, c CreateScheduleComma
 	schedule := scheduler.NewSchedule(c.Description, c.Frequency, time.Now,
 		scheduler.WithScheduleStart(c.ScheduleStart),
 		scheduler.WithRetryPolicy(retryPolicy),
-		scheduler.WithJob(c.Job.Slug, c.Job.Data),
-		scheduler.WithConfiguration(c.Configuration.TransportType, c.Configuration.Url))
+		scheduler.WithJob(c.Job.Slug, c.Job.Data))
 
 	if err = h.Storage.Add(ctx, schedule); err != nil {
 		return nil, err

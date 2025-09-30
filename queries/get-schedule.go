@@ -26,7 +26,6 @@ type ScheduleDetailsDto struct {
 	LastExecutionDate *time.Time                `json:"lastExecutionDate"`
 	NextExecutionDate *time.Time                `json:"nextExecutionDate"`
 	Job               ScheduleDetailsJobDto     `json:"job"`
-	Configuration     ScheduleConfigurationDto  `json:"configuration"`
 	RecentJobRuns     map[uuid.UUID][]JobRunDto `json:"recentJobRuns"`
 }
 
@@ -48,11 +47,6 @@ type JobRunDto struct {
 	Reason    *string                `json:"reason"`
 	StartDate time.Time              `json:"startDate"`
 	EndDate   *time.Time             `json:"endDate"`
-}
-
-type ScheduleConfigurationDto struct {
-	TransportType scheduler.TransportType `json:"transportType"`
-	Url           string                  `json:"url"`
 }
 
 var (
@@ -111,10 +105,6 @@ func (h GetScheduleHandler) Handle(ctx context.Context, q GetSchedule) (Schedule
 			Id:   schedule.Job.Id,
 			Slug: schedule.Job.Slug,
 			Data: schedule.Job.Data,
-		},
-		Configuration: ScheduleConfigurationDto{
-			TransportType: schedule.Configuration.TransportType,
-			Url:           schedule.Configuration.Url,
 		},
 		RecentJobRuns: recentJobRunsDto,
 	}, nil
