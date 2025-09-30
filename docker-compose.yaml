@@ -1,0 +1,32 @@
+services:
+  postgresql:
+    image: postgres:18-bookworm
+    ports:
+      - 5432:5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=admin
+      - POSTGRES_USER=admin
+    networks:
+      - dev
+
+  rabbitmq:
+    image: rabbitmq:4.1.4-management
+    container_name: rabbitmq
+    restart: always
+    ports:
+      - 5672:5672
+      - 15672:15672
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - dev
+
+volumes:
+  rabbitmq_data:
+  postgres_data:
+
+networks:
+  dev:
+    driver: bridge
