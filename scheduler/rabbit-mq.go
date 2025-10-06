@@ -313,7 +313,7 @@ func (t *RabbitMqTransport) DeleteQueue(queue string) error {
 		return err
 	}
 
-	_, err = channel.QueueDelete(queue, true, true, false)
+	_, err = channel.QueueDelete(queue, false, true, false)
 	if err != nil {
 		return err
 	}
