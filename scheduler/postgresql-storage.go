@@ -22,7 +22,7 @@ type StorageDriver interface {
 	GetJobRun(ctx context.Context, id uuid.UUID) (*JobRun, error)
 	GetJobRunGroup(ctx context.Context, scheduleId uuid.UUID, groupId uuid.UUID) ([]*JobRun, error)
 	GetJobRuns(ctx context.Context, scheduleId uuid.UUID) ([]*JobRun, error)
-	GetRecentJobRuns(ctx context.Context, scheduleId uuid.UUID) ([]*JobRun, error)
+	GetRecentJobRuns(ctx context.Context, scheduleId uuid.UUID, numOfRecentRuns int16) ([]*JobRun, error)
 	UpdateJobRun(ctx context.Context, jobRun JobRun) error
 }
 
@@ -333,13 +333,13 @@ func (pg Pgsql) GetJobRuns(ctx context.Context, scheduleId uuid.UUID) ([]*JobRun
 	return jobRuns, nil
 }
 
-func (pg Pgsql) GetRecentJobRuns(ctx context.Context, scheduleId uuid.UUID) ([]*JobRun, error) {
+func (pg Pgsql) GetRecentJobRuns(ctx context.Context, scheduleId uuid.UUID, numOfRecentRuns int16) ([]*JobRun, error) {
 	sql := `SELECT * FROM (
 				SELECT id, group_id, schedule_id, status, reason, start_date, end_date FROM job_runs 
-				WHERE schedule_id = $1 ORDER BY end_date DESC LIMIT 5
+				WHERE schedule_id = $1 ORDER BY end_date DESC LIMIT $2
 			) ORDER BY end_date ASC`
 
-	rows, err := pg.pool.Query(ctx, sql, scheduleId)
+	rows, err := pg.pool.Query(ctx, sql, scheduleId, numOfRecentRuns)
 	if err != nil {
 		return nil, err
 	}

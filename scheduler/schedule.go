@@ -62,7 +62,7 @@ func (s *Schedule) Start(now func() time.Time) {
 func (s *Schedule) Succeed(now func() time.Time) {
 	nextExecAt := getNextExecutionTime(s.Frequency, now)
 
-	if nextExecAt == (time.Time{}) {
+	if nextExecAt.Equal((time.Time{})) {
 		s.NextExecutionDate = nil
 		s.Status = Finished
 	} else {
@@ -84,7 +84,7 @@ func (s *Schedule) Failed(attempt int, now func() time.Time) {
 	}
 
 	nextExecAt := getNextExecutionTime(s.Frequency, now)
-	if nextExecAt == (time.Time{}) {
+	if nextExecAt.Equal((time.Time{})) {
 		s.NextExecutionDate = nil
 		s.Status = Finished
 	} else {

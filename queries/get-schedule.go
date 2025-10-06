@@ -56,6 +56,8 @@ var (
 	}
 )
 
+const numberOfRecentRuns int16 = 3
+
 func (h GetScheduleHandler) Handle(ctx context.Context, q GetSchedule) (ScheduleDetailsDto, error) {
 	schedule, err := h.Storage.GetScheduleById(ctx, q.ScheduleId)
 	if err != nil {
@@ -66,7 +68,7 @@ func (h GetScheduleHandler) Handle(ctx context.Context, q GetSchedule) (Schedule
 		return ScheduleDetailsDto{}, ErrScheduleNotFound
 	}
 
-	jobRuns, err := h.Storage.GetRecentJobRuns(ctx, schedule.Id)
+	jobRuns, err := h.Storage.GetRecentJobRuns(ctx, schedule.Id, numberOfRecentRuns)
 	if err != nil {
 		return ScheduleDetailsDto{}, err
 	}

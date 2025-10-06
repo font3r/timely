@@ -7,7 +7,7 @@
   "transport": {
     "rabbitmq": {
       "enabled": true,
-      "connectionString": "amqp://guest:guest@localhost:5672"
+      "connectionString": "amqp://timely:timely@localhost:5672"
     }
   }
 }

@@ -10,10 +10,12 @@ import (
 	"timely/libs"
 	"timely/scheduler"
 
+	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
 )
 
-const jobsAmount = 1
+const jobCycles = 1
+const testJobSlug = "process-user-notifications"
 
 func main() {
 	ctx := context.Background()
@@ -26,59 +28,89 @@ func main() {
 	logger := baseLogger.Sugar()
 	defer logger.Sync()
 
-	StartRabbitMq(context.Background(), logger)
+	StartRabbitMq(testJobSlug, context.Background(), logger)
 
 	<-ctx.Done()
 }
 
-func StartRabbitMq(ctx context.Context, logger *zap.SugaredLogger) {
-	logger.Infoln("starting ...")
+func StartRabbitMq(queue string, ctx context.Context, logger *zap.SugaredLogger) error {
+	conn, err := amqp.DialConfig("amqp://timely:timely@localhost:5672", amqp.Config{
+		Properties: amqp.Table{
+			"product":  "async-job-handler",
+			"version":  "v0.1.0",
+			"platform": "golang",
+		}})
 
-	tra, err := scheduler.NewRabbitMqTransport("amqp://guest:guest@localhost:5672", logger)
 	if err != nil {
-		panic(fmt.Sprintf("test-app: create transport error - %s", err))
+		return err
 	}
 
+	chann, err := conn.Channel()
+	if err != nil {
+		return err
+	}
+
+	_, err = chann.QueueDeclare(queue, true, false, false,
+		false, amqp.Table{})
+
 	go func(jobSlug string) {
-		err = tra.Subscribe(ctx, jobSlug, func(message []byte) error {
-			logger.Infof("requested job start with slug %s", jobSlug)
-
-			var event libs.ScheduleJobEvent
-			err = json.Unmarshal(message, &event)
-			if err != nil {
-				return err
-			}
-
-			err = processFakeJob(ctx, tra, event, logger)
-			if err != nil {
-				logger.Errorf("error during job processing - %s", err)
-			}
-
-			return nil
-		})
-
+		deliveryChan, err := chann.ConsumeWithContext(ctx, queue, "", false,
+			false, false, false, amqp.Table{})
 		if err != nil {
-			logger.Errorf("error during subscribe for job %s - %s", jobSlug, err)
+			logger.Errorf("error during rabbitmq consume - %v", err)
 			panic(err)
 		}
-	}("process-user-notifications")
 
-	logger.Infof("test app listening for 'process-user-notifications'")
+		logger.Infof("subscribed to queue %s", testJobSlug)
+
+		for {
+			rawMessage, open := <-deliveryChan
+			if !open {
+				fmt.Printf("channel closed")
+				return
+			}
+
+			var event libs.ScheduleJobEvent
+			err = json.Unmarshal(rawMessage.Body, &event)
+			if err != nil {
+				panic(err)
+			}
+
+			err = processFakeJob(ctx, chann, event, logger)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}(queue)
+
+	return err
 }
 
-func processFakeJob(ctx context.Context, tra *scheduler.RabbitMqTransport, event libs.ScheduleJobEvent,
+func processFakeJob(ctx context.Context, chann *amqp.Channel, event libs.ScheduleJobEvent,
 	logger *zap.SugaredLogger) error {
-	for i := 0; i < 5; i++ {
+	for i := 0; i < jobCycles; i++ {
 		if jitterFail() {
-			err := tra.Publish(ctx, string(scheduler.JobStatusExchange),
-				string(scheduler.JobStatusRoutingKey), libs.JobStatusEvent{
-					ScheduleId: event.ScheduleId,
-					GroupId:    event.GroupId,
-					JobRunId:   event.JobRunId,
-					Status:     string(libs.JobFailed),
-					Reason:     fmt.Sprintf("failed due to jitter error at %d", i),
-				})
+			data, err := json.Marshal(libs.JobStatusEvent{
+				ScheduleId: event.ScheduleId,
+				GroupId:    event.GroupId,
+				JobRunId:   event.JobRunId,
+				Status:     string(libs.JobFailed),
+				Reason:     fmt.Sprintf("failed due to jitter error at %d", i),
+			})
 
+			if err != nil {
+				return errors.New("invalid message format")
+			}
+
+			msg := amqp.Publishing{
+				DeliveryMode: amqp.Persistent,
+				Timestamp:    time.Now(),
+				ContentType:  "application/json",
+				Body:         data,
+			}
+
+			err = chann.PublishWithContext(ctx, string(scheduler.JobStatusExchange),
+				string(scheduler.JobStatusRoutingKey), false, false, msg)
 			if err != nil {
 				logger.Errorf("error during publishing job status %v", err)
 			}
@@ -90,14 +122,23 @@ func processFakeJob(ctx context.Context, tra *scheduler.RabbitMqTransport, event
 		time.Sleep(time.Second)
 	}
 
-	err := tra.Publish(ctx, string(scheduler.JobStatusExchange),
-		string(scheduler.JobStatusRoutingKey), libs.JobStatusEvent{
-			ScheduleId: event.ScheduleId,
-			GroupId:    event.GroupId,
-			JobRunId:   event.JobRunId,
-			Status:     string(libs.JobSucceed),
-			Reason:     "success",
-		})
+	data, err := json.Marshal(libs.JobStatusEvent{
+		ScheduleId: event.ScheduleId,
+		GroupId:    event.GroupId,
+		JobRunId:   event.JobRunId,
+		Status:     string(libs.JobSucceed),
+		Reason:     "success",
+	})
+
+	msg := amqp.Publishing{
+		DeliveryMode: amqp.Persistent,
+		Timestamp:    time.Now(),
+		ContentType:  "application/json",
+		Body:         data,
+	}
+
+	chann.PublishWithContext(ctx, string(scheduler.JobStatusExchange),
+		string(scheduler.JobStatusRoutingKey), false, false, msg)
 
 	if err != nil {
 		logger.Errorf("error publishing during job status %v", err)

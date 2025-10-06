@@ -146,7 +146,7 @@ func (s storageDriverFake) GetJobRuns(ctx context.Context, scheduleId uuid.UUID)
 	panic("implement me")
 }
 
-func (s storageDriverFake) GetRecentJobRuns(ctx context.Context, scheduleId uuid.UUID) ([]*scheduler.JobRun, error) {
+func (s storageDriverFake) GetRecentJobRuns(ctx context.Context, scheduleId uuid.UUID, numOfJobRuns int16) ([]*scheduler.JobRun, error) {
 	v, exists := s.jobRuns[scheduleId.String()]
 	if !exists {
 		return nil, ErrScheduleNotFound

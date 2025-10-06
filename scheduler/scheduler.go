@@ -184,7 +184,7 @@ func (s *Scheduler) handleJobStatusEvent(ctx context.Context, message []byte) er
 		return err
 	}
 
-	s.logger.Infof("received status %+v", jobStatus)
+	s.logger.Infof("received job status %+v", jobStatus)
 
 	schedule, err := s.Storage.GetScheduleById(ctx, jobStatus.ScheduleId)
 	if err != nil {
@@ -243,8 +243,10 @@ func (s *Scheduler) onScheduleFinish(schedule *Schedule) {
 	if schedule.Frequency == string(Once) {
 		err := s.AsyncTransport.DeleteQueue(schedule.Job.Slug)
 		if err != nil {
-			s.logger.Errorf("error during deleting queue - %s", err)
+			s.logger.Errorf("error during deleting queue %s - %s", schedule.Job.Slug, err)
 			return
 		}
+
+		s.logger.Infof("schedule %s finished due to once frequency", schedule.Id)
 	}
 }
